@@ -11,6 +11,38 @@ CREATE TABLE IF NOT EXISTS users (
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     INDEX idx_username (username),
-    INDEX idx_email (email)
+    INDEX idx_email (email),
+    INDEX idx_role (role)
+);
+
+-- Create tournament table
+CREATE TABLE IF NOT EXISTS tournament (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    owner_id BIGINT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    FOREIGN KEY (owner_id) REFERENCES users(id),
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_name (name)
+);
+
+-- Create tournament_admins junction table
+CREATE TABLE IF NOT EXISTS tournament_admins (
+    tournament_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    PRIMARY KEY (tournament_id, user_id),
+    FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Create tournament_players junction table
+CREATE TABLE IF NOT EXISTS tournament_players (
+    tournament_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    PRIMARY KEY (tournament_id, user_id),
+    FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
