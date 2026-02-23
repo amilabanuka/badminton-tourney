@@ -5,7 +5,9 @@ import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
 import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
+import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,9 @@ class TournamentServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TournamentPlayerRepository tournamentPlayerRepository;
+
     @InjectMocks
     private TournamentService tournamentService;
 
@@ -55,7 +60,7 @@ class TournamentServiceTest {
         playerUser.setId(3L);
         playerUser.setRole(Role.PLAYER);
 
-        tournament = new Tournament("Spring Championship", 2L, true);
+        tournament = new Tournament("Spring Championship", 2L, true, TournamentType.ONE_OFF);
         tournament.setId(1L);
     }
 
@@ -65,7 +70,7 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_Success() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true);
+        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true, TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
         when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
@@ -81,7 +86,7 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_NameAlreadyExists() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true);
+        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true, TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(true);
 
         TournamentResponse response = tournamentService.createTournament(request);
@@ -93,7 +98,7 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_OwnerNotFound() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 999L, true);
+        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 999L, true, TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -105,7 +110,7 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_OwnerNotTournyAdmin() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 3L, true);
+        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 3L, true, TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
 
@@ -222,31 +227,25 @@ class TournamentServiceTest {
     }
 
     // -------------------------------------------------------------------------
-    // removeTournamentPlayer
+    // removeTournamentPlayer — removal is not supported
     // -------------------------------------------------------------------------
 
     @Test
-    void testRemoveTournamentPlayer_Success() {
-        // Pre-seed the players list so removeIf finds the entry
-        tournament.getPlayers().add(new TournamentPlayer(tournament, playerUser));
-        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
-        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
-
+    void testRemoveTournamentPlayer_AlwaysReturnsFalse() {
+        // Player removal is intentionally blocked regardless of whether the player exists
         TournamentResponse response = tournamentService.removeTournamentPlayer(1L, 3L);
 
-        assertTrue(response.isSuccess());
-        assertEquals("Tournament player removed successfully", response.getMessage());
-        verify(tournamentRepository, times(1)).save(any(Tournament.class));
+        assertFalse(response.isSuccess());
+        assertEquals("Players cannot be removed from a tournament. Use disable instead.", response.getMessage());
+        verify(tournamentRepository, never()).save(any(Tournament.class));
     }
 
     @Test
-    void testRemoveTournamentPlayer_NotFound() {
-        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
-
+    void testRemoveTournamentPlayer_NonExistentPlayer_AlsoReturnsFalse() {
         TournamentResponse response = tournamentService.removeTournamentPlayer(1L, 99L);
 
         assertFalse(response.isSuccess());
-        assertEquals("User is not a tournament player", response.getMessage());
+        assertEquals("Players cannot be removed from a tournament. Use disable instead.", response.getMessage());
         verify(tournamentRepository, never()).save(any(Tournament.class));
     }
 
