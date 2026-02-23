@@ -763,7 +763,3 @@ h3, h5 {
   padding: 0.25rem 0.5rem;
 }
 </style>
-
-
-
-

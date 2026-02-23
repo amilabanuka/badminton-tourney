@@ -181,7 +181,7 @@ export default {
       const n = this.selectedIds.length
       if (n === 0) return null
       if (n > MAX_PLAYERS) return `Too many players selected (${n}). Maximum is ${MAX_PLAYERS}.`
-      if (n < 4) return `At least 4 players are required to create a game day.`
+      if (n < 4) return 'At least 4 players are required to create a game day.'
       if (INVALID_COUNTS.has(n)) return `${n} players cannot be evenly split into groups of 4 or 5. Try selecting a different number. (Invalid counts: 6, 7, 11)`
       return null
     }
@@ -288,5 +288,3 @@ export default {
   font-size: 0.85rem;
 }
 </style>
-
-
