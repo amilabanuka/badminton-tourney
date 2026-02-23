@@ -381,6 +381,7 @@ public class TournamentService {
                     .thenComparing(p -> p.getUser().getId()))
             .map(p -> new TournamentResponse.PlayerDto(
                 p.getUser().getId(),
+                p.getId(),
                 p.getUser().getFirstName(),
                 p.getUser().getLastName(),
                 p.getUser().getEmail(),

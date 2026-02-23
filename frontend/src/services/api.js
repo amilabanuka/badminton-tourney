@@ -94,6 +94,33 @@ export const tournamentAPI = {
   // Toggle tournament enabled/disabled
   toggleTournament (id) {
     return apiClient.patch(`/api/tournaments/${id}/toggle`)
+  },
+
+  // ── League Game Day ──────────────────────────────────────────────
+
+  // Create a new league game day
+  createGameDay (tournamentId, data) {
+    return apiClient.post(`/api/tournaments/${tournamentId}/game-days`, data)
+  },
+
+  // Get all game days for a tournament
+  getGameDays (tournamentId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/game-days`)
+  },
+
+  // Get a specific game day
+  getGameDay (tournamentId, dayId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/game-days/${dayId}`)
+  },
+
+  // Start a game day (PENDING → ONGOING)
+  startGameDay (tournamentId, dayId) {
+    return apiClient.post(`/api/tournaments/${tournamentId}/game-days/${dayId}/start`)
+  },
+
+  // Discard (delete) a game day
+  discardGameDay (tournamentId, dayId) {
+    return apiClient.delete(`/api/tournaments/${tournamentId}/game-days/${dayId}`)
   }
 }
 

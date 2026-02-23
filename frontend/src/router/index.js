@@ -58,7 +58,19 @@ const routes = [
   {
     path: '/admin/tournaments/:id',
     name: 'admin-tournament-details',
-    component: () => import('../views/admin/AdminTournamentDetailsView.vue'),
+    component: () => import('../views/admin/TournamentDetailsAdminView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/tournaments/:id/game-days/new',
+    name: 'create-league-day',
+    component: () => import('../views/admin/CreateLeagueDayView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/tournaments/:id/game-days/:dayId',
+    name: 'league-day-view',
+    component: () => import('../views/admin/LeagueDayView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]

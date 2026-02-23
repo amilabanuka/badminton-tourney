@@ -83,6 +83,7 @@ public class TournamentResponse {
     @NoArgsConstructor
     public static class PlayerDto {
         private Long id;
+        private Long tournamentPlayerId;
         private String firstName;
         private String lastName;
         private String email;
@@ -91,8 +92,9 @@ public class TournamentResponse {
         private Integer rank;
         private BigDecimal rankScore;
 
-        public PlayerDto(Long id, String firstName, String lastName, String email, String status, long statusChangedAt, Integer rank, BigDecimal rankScore) {
+        public PlayerDto(Long id, Long tournamentPlayerId, String firstName, String lastName, String email, String status, long statusChangedAt, Integer rank, BigDecimal rankScore) {
             this.id = id;
+            this.tournamentPlayerId = tournamentPlayerId;
             this.firstName = firstName;
             this.lastName = lastName;
             this.email = email;
