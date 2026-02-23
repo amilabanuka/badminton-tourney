@@ -44,6 +44,7 @@ public class TournamentResponse {
         private long updatedAt;
         private List<Long> adminIds;
         private List<Long> playerIds;
+        private List<AdminDto> admins;
 
         public TournamentDto(Long id, String name, Long ownerId, boolean enabled, long createdAt, long updatedAt) {
             this.id = id;
@@ -52,6 +53,23 @@ public class TournamentResponse {
             this.enabled = enabled;
             this.createdAt = createdAt;
             this.updatedAt = updatedAt;
+        }
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class AdminDto {
+        private Long id;
+        private String firstName;
+        private String lastName;
+        private String email;
+
+        public AdminDto(Long id, String firstName, String lastName, String email) {
+            this.id = id;
+            this.firstName = firstName;
+            this.lastName = lastName;
+            this.email = email;
         }
     }
 }

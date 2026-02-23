@@ -3,6 +3,8 @@ package nl.amila.badminton.manager.service;
 import nl.amila.badminton.manager.dto.*;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
+import nl.amila.badminton.manager.entity.TournamentAdmin;
+import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.User;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
@@ -12,7 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,9 +32,6 @@ class TournamentServiceTest {
 
     @Mock
     private UserRepository userRepository;
-
-    @Mock
-    private JdbcTemplate jdbcTemplate;
 
     @InjectMocks
     private TournamentService tournamentService;
@@ -60,18 +59,19 @@ class TournamentServiceTest {
         tournament.setId(1L);
     }
 
+    // -------------------------------------------------------------------------
+    // createTournament
+    // -------------------------------------------------------------------------
+
     @Test
     void testCreateTournament_Success() {
-        // Arrange
         CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
         when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
 
-        // Act
         TournamentResponse response = tournamentService.createTournament(request);
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament created successfully", response.getMessage());
         assertNotNull(response.getTournament());
@@ -81,14 +81,11 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_NameAlreadyExists() {
-        // Arrange
         CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(true);
 
-        // Act
         TournamentResponse response = tournamentService.createTournament(request);
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("Tournament name already exists", response.getMessage());
         verify(tournamentRepository, never()).save(any(Tournament.class));
@@ -96,156 +93,213 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_OwnerNotFound() {
-        // Arrange
         CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 999L, true);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // Act
         TournamentResponse response = tournamentService.createTournament(request);
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("Owner user not found", response.getMessage());
     }
 
     @Test
     void testCreateTournament_OwnerNotTournyAdmin() {
-        // Arrange
         CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 3L, true);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
 
-        // Act
         TournamentResponse response = tournamentService.createTournament(request);
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("Owner must have TOURNY_ADMIN role", response.getMessage());
     }
 
+    // -------------------------------------------------------------------------
+    // addTournamentAdmin
+    // -------------------------------------------------------------------------
+
     @Test
     void testAddTournamentAdmin_Success() {
-        // Arrange
+        // Tournament has no admins yet so the duplicate check passes
         AddTournamentAdminRequest request = new AddTournamentAdminRequest(2L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(1L), eq(2L))).thenReturn(0);
-        when(jdbcTemplate.update(anyString(), eq(1L), eq(2L))).thenReturn(1);
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
 
-        // Act
         TournamentResponse response = tournamentService.addTournamentAdmin(1L, request);
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament admin added successfully", response.getMessage());
-        verify(jdbcTemplate, times(1)).update(anyString(), eq(1L), eq(2L));
+        verify(tournamentRepository, times(1)).save(any(Tournament.class));
     }
 
     @Test
     void testAddTournamentAdmin_UserNotTournyAdmin() {
-        // Arrange
         AddTournamentAdminRequest request = new AddTournamentAdminRequest(3L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
 
-        // Act
         TournamentResponse response = tournamentService.addTournamentAdmin(1L, request);
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("User must have TOURNY_ADMIN role", response.getMessage());
     }
 
     @Test
+    void testAddTournamentAdmin_AlreadyAdmin() {
+        // Pre-seed the tournament's admins list
+        tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
+        AddTournamentAdminRequest request = new AddTournamentAdminRequest(2L);
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.addTournamentAdmin(1L, request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("User is already a tournament admin", response.getMessage());
+        verify(tournamentRepository, never()).save(any(Tournament.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // addTournamentPlayer
+    // -------------------------------------------------------------------------
+
+    @Test
     void testAddTournamentPlayer_Success() {
-        // Arrange
         AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(3L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(1L), eq(3L))).thenReturn(0);
-        when(jdbcTemplate.update(anyString(), eq(1L), eq(3L))).thenReturn(1);
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
 
-        // Act
         TournamentResponse response = tournamentService.addTournamentPlayer(1L, request);
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament player added successfully", response.getMessage());
-        verify(jdbcTemplate, times(1)).update(anyString(), eq(1L), eq(3L));
+        verify(tournamentRepository, times(1)).save(any(Tournament.class));
     }
 
     @Test
     void testAddTournamentPlayer_UserNotPlayer() {
-        // Arrange
         AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(2L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
 
-        // Act
         TournamentResponse response = tournamentService.addTournamentPlayer(1L, request);
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("User must have PLAYER role", response.getMessage());
     }
 
+    // -------------------------------------------------------------------------
+    // removeTournamentAdmin
+    // -------------------------------------------------------------------------
+
     @Test
     void testRemoveTournamentAdmin_Success() {
-        // Arrange
+        // Pre-seed the admins list so removeIf finds the entry
+        tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
-        when(jdbcTemplate.update(anyString(), eq(1L), eq(2L))).thenReturn(1);
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
 
-        // Act
         TournamentResponse response = tournamentService.removeTournamentAdmin(1L, 2L);
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament admin removed successfully", response.getMessage());
+        verify(tournamentRepository, times(1)).save(any(Tournament.class));
     }
+
+    @Test
+    void testRemoveTournamentAdmin_NotFound() {
+        // Empty admins list — user is not an admin
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+
+        TournamentResponse response = tournamentService.removeTournamentAdmin(1L, 99L);
+
+        assertFalse(response.isSuccess());
+        assertEquals("User is not a tournament admin", response.getMessage());
+        verify(tournamentRepository, never()).save(any(Tournament.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // removeTournamentPlayer
+    // -------------------------------------------------------------------------
 
     @Test
     void testRemoveTournamentPlayer_Success() {
-        // Arrange
+        // Pre-seed the players list so removeIf finds the entry
+        tournament.getPlayers().add(new TournamentPlayer(tournament, playerUser));
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
-        when(jdbcTemplate.update(anyString(), eq(1L), eq(3L))).thenReturn(1);
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
 
-        // Act
         TournamentResponse response = tournamentService.removeTournamentPlayer(1L, 3L);
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament player removed successfully", response.getMessage());
+        verify(tournamentRepository, times(1)).save(any(Tournament.class));
     }
 
     @Test
-    void testGetTournaments_Success() {
-        // Arrange
+    void testRemoveTournamentPlayer_NotFound() {
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+
+        TournamentResponse response = tournamentService.removeTournamentPlayer(1L, 99L);
+
+        assertFalse(response.isSuccess());
+        assertEquals("User is not a tournament player", response.getMessage());
+        verify(tournamentRepository, never()).save(any(Tournament.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // getTournaments — role-scoped
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testGetTournaments_AsAdmin_ReturnsAll() {
         List<Tournament> tournaments = new ArrayList<>();
         tournaments.add(tournament);
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
         when(tournamentRepository.findAll()).thenReturn(tournaments);
-        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), anyLong())).thenReturn(new ArrayList<>());
 
-        // Act
-        TournamentResponse response = tournamentService.getTournaments();
+        TournamentResponse response = tournamentService.getTournaments("admin");
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournaments retrieved successfully", response.getMessage());
         assertNotNull(response.getTournaments());
         assertEquals(1, response.getTournaments().size());
+        // ADMIN path: findAll called, findByAdminsUserId never called
+        verify(tournamentRepository, times(1)).findAll();
+        verify(tournamentRepository, never()).findByAdminsUserId(anyLong());
     }
 
     @Test
-    void testGetTournamentById_Success() {
-        // Arrange
+    void testGetTournaments_AsTournyAdmin_ReturnsOnlyOwn() {
+        // Seed the tournament so tourny_admin is an admin of it
+        tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+        when(tournamentRepository.findByAdminsUserId(2L)).thenReturn(List.of(tournament));
+
+        TournamentResponse response = tournamentService.getTournaments("tourny_admin");
+
+        assertTrue(response.isSuccess());
+        assertEquals(1, response.getTournaments().size());
+        assertEquals("Spring Championship", response.getTournaments().get(0).getName());
+        // TOURNY_ADMIN path: findByAdminsUserId called, findAll never called
+        verify(tournamentRepository, times(1)).findByAdminsUserId(2L);
+        verify(tournamentRepository, never()).findAll();
+    }
+
+    // -------------------------------------------------------------------------
+    // getTournamentById — role-scoped
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testGetTournamentById_AsAdmin_Success() {
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
-        when(jdbcTemplate.queryForList(anyString(), eq(Long.class), anyLong())).thenReturn(new ArrayList<>());
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
 
-        // Act
-        TournamentResponse response = tournamentService.getTournamentById(1L);
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Tournament retrieved successfully", response.getMessage());
         assertNotNull(response.getTournament());
@@ -253,29 +307,50 @@ class TournamentServiceTest {
     }
 
     @Test
+    void testGetTournamentById_AsTournyAdmin_IsAdmin_Success() {
+        // tourny_admin is in the admins list → access granted
+        tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "tourny_admin");
+
+        assertTrue(response.isSuccess());
+        assertEquals("Tournament retrieved successfully", response.getMessage());
+    }
+
+    @Test
+    void testGetTournamentById_AsTournyAdmin_NotAdmin_Throws403() {
+        // tourny_admin is NOT in the admins list → AccessDeniedException
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+
+        assertThrows(AccessDeniedException.class,
+            () -> tournamentService.getTournamentById(1L, "tourny_admin"));
+    }
+
+    @Test
     void testGetTournamentById_NotFound() {
-        // Arrange
         when(tournamentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        // Act
-        TournamentResponse response = tournamentService.getTournamentById(999L);
+        TournamentResponse response = tournamentService.getTournamentById(999L, "admin");
 
-        // Assert
         assertFalse(response.isSuccess());
         assertEquals("Tournament not found", response.getMessage());
     }
 
+    // -------------------------------------------------------------------------
+    // getUsersByRole
+    // -------------------------------------------------------------------------
+
     @Test
     void testGetUsersByRole_Success() {
-        // Arrange
         List<User> users = new ArrayList<>();
         users.add(tournamentAdminUser);
         when(userRepository.findByRole(Role.TOURNY_ADMIN.name())).thenReturn(users);
 
-        // Act
         UserListResponse response = tournamentService.getUsersByRole(Role.TOURNY_ADMIN.name());
 
-        // Assert
         assertTrue(response.isSuccess());
         assertEquals("Users retrieved successfully", response.getMessage());
         assertNotNull(response.getUsers());

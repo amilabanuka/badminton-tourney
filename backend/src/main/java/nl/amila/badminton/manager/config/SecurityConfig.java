@@ -74,8 +74,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/tournaments").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/admins/available").hasRole("ADMIN")
                 .requestMatchers("/api/tournaments/*/admins/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/tournaments/*/toggle").hasRole("ADMIN")
                 .requestMatchers("/api/tournaments/*/players/**").hasAnyRole("ADMIN", "TOURNY_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/tournaments/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/**").hasAnyRole("ADMIN", "TOURNY_ADMIN")
 
                 // All other requests require authentication
                 .anyRequest().authenticated()

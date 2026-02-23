@@ -12,5 +12,6 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long> {
     Optional<Tournament> findByName(String name);
     boolean existsByName(String name);
     List<Tournament> findByOwnerId(Long ownerId);
+    List<Tournament> findByAdminsUserId(Long userId);
 }
 

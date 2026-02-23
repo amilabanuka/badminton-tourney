@@ -53,7 +53,7 @@ const routes = [
     path: '/admin/tournaments/create',
     name: 'create-tournament',
     component: () => import('../views/admin/CreateTournamentView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true, requiresAdmin: true, requiresSuperAdmin: true }
   },
   {
     path: '/admin/tournaments/:id',
@@ -75,15 +75,16 @@ router.beforeEach((to, from, next) => {
 
   const isAuthenticated = store.getters['auth/isAuthenticated']
   const isAdmin = store.getters['auth/isAdmin']
+  const isTournyAdmin = store.getters['auth/isTournyAdmin']
 
-  // Redirect authenticated admins from home/dashboard to admin panel
-  if (isAuthenticated && isAdmin && (to.path === '/' || to.path === '/dashboard')) {
+  // Redirect authenticated admins and tourny admins from home/dashboard to admin panel
+  if (isAuthenticated && (isAdmin || isTournyAdmin) && (to.path === '/' || to.path === '/dashboard')) {
     next('/admin/tournaments')
     return
   }
 
-  // Redirect to dashboard if authenticated non-admin user tries to access guest pages
-  if (to.meta.guest && isAuthenticated && !isAdmin) {
+  // Redirect authenticated non-admin users away from guest pages
+  if (to.meta.guest && isAuthenticated && !isAdmin && !isTournyAdmin) {
     next('/dashboard')
     return
   }
@@ -94,8 +95,14 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // Check if route requires admin role
-  if (to.meta.requiresAdmin && !isAdmin) {
+  // Superadmin-only routes (e.g. create tournament) - TOURNY_ADMIN not allowed
+  if (to.meta.requiresSuperAdmin && !isAdmin) {
+    next('/admin/tournaments')
+    return
+  }
+
+  // Check if route requires admin role (ADMIN or TOURNY_ADMIN)
+  if (to.meta.requiresAdmin && !isAdmin && !isTournyAdmin) {
     next('/dashboard')
     return
   }

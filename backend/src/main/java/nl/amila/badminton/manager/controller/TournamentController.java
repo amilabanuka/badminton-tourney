@@ -5,6 +5,8 @@ import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.service.TournamentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -113,24 +115,29 @@ public class TournamentController {
     }
 
     /**
-     * Get all tournaments (authenticated users)
+     * Get all tournaments (ADMIN sees all, TOURNY_ADMIN sees only their own)
      */
     @GetMapping
-    public ResponseEntity<TournamentResponse> getTournaments() {
-        TournamentResponse response = tournamentService.getTournaments();
+    public ResponseEntity<TournamentResponse> getTournaments(Authentication authentication) {
+        TournamentResponse response = tournamentService.getTournaments(authentication.getName());
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Get tournament by ID (authenticated users)
+     * Get tournament by ID - TOURNY_ADMIN receives 403 if not an admin of this tournament
      */
     @GetMapping("/{id}")
-    public ResponseEntity<TournamentResponse> getTournamentById(@PathVariable Long id) {
-        TournamentResponse response = tournamentService.getTournamentById(id);
-        if (response.isSuccess()) {
-            return ResponseEntity.ok(response);
-        } else {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    public ResponseEntity<TournamentResponse> getTournamentById(@PathVariable Long id, Authentication authentication) {
+        try {
+            TournamentResponse response = tournamentService.getTournamentById(id, authentication.getName());
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new TournamentResponse(false, e.getMessage()));
         }
     }
 }

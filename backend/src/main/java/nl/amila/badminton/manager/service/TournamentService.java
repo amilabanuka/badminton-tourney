@@ -8,6 +8,7 @@ import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.User;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -202,72 +203,50 @@ public class TournamentService {
     }
 
     /**
-     * Get all tournaments
+     * Get tournaments - ADMIN sees all, TOURNY_ADMIN sees only tournaments they are an admin of
      */
-    public TournamentResponse getTournaments() {
-        List<Tournament> tournaments = new ArrayList<>();
-        tournamentRepository.findAll().forEach(tournaments::add);
+    public TournamentResponse getTournaments(String username) {
+        User caller = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+
+        List<Tournament> tournaments;
+        if (Role.TOURNY_ADMIN.name().equals(caller.getRole())) {
+            tournaments = tournamentRepository.findByAdminsUserId(caller.getId());
+        } else {
+            tournaments = new ArrayList<>();
+            tournamentRepository.findAll().forEach(tournaments::add);
+        }
 
         List<TournamentResponse.TournamentDto> tournamentDtos = tournaments.stream()
-            .map(t -> {
-                TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
-                    t.getId(),
-                    t.getName(),
-                    t.getOwnerId(),
-                    t.isEnabled(),
-                    t.getCreatedAt(),
-                    t.getUpdatedAt()
-                );
-
-                // Get admin and player IDs from tournament's collections
-                List<Long> adminIds = t.getAdmins().stream()
-                    .map(a -> a.getUser().getId())
-                    .collect(Collectors.toList());
-                List<Long> playerIds = t.getPlayers().stream()
-                    .map(p -> p.getUser().getId())
-                    .collect(Collectors.toList());
-
-                dto.setAdminIds(adminIds);
-                dto.setPlayerIds(playerIds);
-
-                return dto;
-            })
+            .map(this::toDto)
             .collect(Collectors.toList());
 
         return new TournamentResponse(true, "Tournaments retrieved successfully", tournamentDtos);
     }
 
     /**
-     * Get tournament by ID
+     * Get tournament by ID - TOURNY_ADMIN must be an admin of that tournament, else 403
      */
-    public TournamentResponse getTournamentById(Long id) {
+    public TournamentResponse getTournamentById(Long id, String username) {
         Optional<Tournament> tournamentOpt = tournamentRepository.findById(id);
         if (tournamentOpt.isEmpty()) {
             return new TournamentResponse(false, "Tournament not found");
         }
 
+        User caller = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+
         Tournament tournament = tournamentOpt.get();
-        TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
-            tournament.getId(),
-            tournament.getName(),
-            tournament.getOwnerId(),
-            tournament.isEnabled(),
-            tournament.getCreatedAt(),
-            tournament.getUpdatedAt()
-        );
 
-        // Get admin and player IDs from tournament's collections
-        List<Long> adminIds = tournament.getAdmins().stream()
-            .map(a -> a.getUser().getId())
-            .collect(Collectors.toList());
-        List<Long> playerIds = tournament.getPlayers().stream()
-            .map(p -> p.getUser().getId())
-            .collect(Collectors.toList());
+        if (Role.TOURNY_ADMIN.name().equals(caller.getRole())) {
+            boolean isAdmin = tournament.getAdmins().stream()
+                .anyMatch(a -> a.getUser().getId().equals(caller.getId()));
+            if (!isAdmin) {
+                throw new AccessDeniedException("You do not have access to this tournament");
+            }
+        }
 
-        dto.setAdminIds(adminIds);
-        dto.setPlayerIds(playerIds);
-
-        return new TournamentResponse(true, "Tournament retrieved successfully", dto);
+        return new TournamentResponse(true, "Tournament retrieved successfully", toDto(tournament));
     }
 
     /**
@@ -285,24 +264,7 @@ public class TournamentService {
         tournamentRepository.save(tournament);
 
         String statusMsg = tournament.isEnabled() ? "enabled" : "disabled";
-        TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
-            tournament.getId(),
-            tournament.getName(),
-            tournament.getOwnerId(),
-            tournament.isEnabled(),
-            tournament.getCreatedAt(),
-            tournament.getUpdatedAt()
-        );
-        List<Long> adminIds = tournament.getAdmins().stream()
-            .map(a -> a.getUser().getId())
-            .collect(Collectors.toList());
-        List<Long> playerIds = tournament.getPlayers().stream()
-            .map(p -> p.getUser().getId())
-            .collect(Collectors.toList());
-        dto.setAdminIds(adminIds);
-        dto.setPlayerIds(playerIds);
-
-        return new TournamentResponse(true, "Tournament " + statusMsg + " successfully", dto);
+        return new TournamentResponse(true, "Tournament " + statusMsg + " successfully", toDto(tournament));
     }
 
     /**
@@ -322,6 +284,30 @@ public class TournamentService {
             .collect(Collectors.toList());
 
         return new UserListResponse(true, "Users retrieved successfully", userDtos);
+    }
+
+    /**
+     * Maps a Tournament entity to a TournamentDto, including full admin details
+     */
+    private TournamentResponse.TournamentDto toDto(Tournament t) {
+        TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
+            t.getId(), t.getName(), t.getOwnerId(), t.isEnabled(), t.getCreatedAt(), t.getUpdatedAt()
+        );
+        dto.setAdminIds(t.getAdmins().stream()
+            .map(a -> a.getUser().getId())
+            .collect(Collectors.toList()));
+        dto.setPlayerIds(t.getPlayers().stream()
+            .map(p -> p.getUser().getId())
+            .collect(Collectors.toList()));
+        dto.setAdmins(t.getAdmins().stream()
+            .map(a -> new TournamentResponse.AdminDto(
+                a.getUser().getId(),
+                a.getUser().getFirstName(),
+                a.getUser().getLastName(),
+                a.getUser().getEmail()
+            ))
+            .collect(Collectors.toList()));
+        return dto;
     }
 }
 
