@@ -14,6 +14,11 @@ public class UserListResponse {
     private String message;
     private List<UserListDto> users;
 
+    public UserListResponse(boolean success, String message) {
+        this.success = success;
+        this.message = message;
+    }
+
     public UserListResponse(boolean success, String message, List<UserListDto> users) {
         this.success = success;
         this.message = message;

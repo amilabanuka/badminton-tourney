@@ -43,8 +43,11 @@ CREATE TABLE IF NOT EXISTS tournament_players (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     tournament_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+    status_changed_at BIGINT NOT NULL,
     UNIQUE KEY uk_tournament_user (tournament_id, user_id),
     FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_status (status)
 );
 

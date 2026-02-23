@@ -103,7 +103,7 @@
         </div>
 
         <!-- Tournament Admins Section -->
-        <div class="card">
+        <div class="card mb-4">
           <div class="card-header bg-light d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Tournament Administrators</h5>
             <button v-if="!isTournyAdmin" class="btn btn-sm btn-success" @click="showAddAdminModal = true">
@@ -145,6 +145,75 @@
             </div>
             <div v-else class="alert alert-info mb-0">
               <i class="bi bi-inbox me-2"></i>No admins assigned yet
+            </div>
+          </div>
+        </div>
+
+        <!-- Tournament Players Section -->
+        <div class="card">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Tournament Players</h5>
+            <button class="btn btn-sm btn-success" @click="openAddPlayerModal">
+              <i class="bi bi-plus-circle me-1"></i>Add Player
+            </button>
+          </div>
+          <div class="card-body">
+            <div v-if="tournamentPlayers.length > 0" class="table-responsive">
+              <table class="table table-sm">
+                <thead class="table-light">
+                  <tr>
+                    <th>Player Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Status Changed</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="player in tournamentPlayers" :key="player.id">
+                    <td>{{ player.firstName }} {{ player.lastName }}</td>
+                    <td>{{ player.email }}</td>
+                    <td>
+                      <span v-if="player.status === 'ENABLED'" class="badge bg-success">ENABLED</span>
+                      <span v-else-if="player.status === 'DISABLED'" class="badge bg-secondary">DISABLED</span>
+                      <span v-else-if="player.status === 'ACTIVE'" class="badge bg-primary">ACTIVE</span>
+                    </td>
+                    <td>{{ formatDate(player.statusChangedAt) }}</td>
+                    <td>
+                      <button
+                        v-if="player.status === 'ENABLED'"
+                        class="btn btn-sm btn-warning"
+                        @click="disablePlayer(player)"
+                        :disabled="togglingPlayerId === player.id"
+                      >
+                        <i v-if="togglingPlayerId === player.id" class="bi bi-hourglass-split"></i>
+                        <span v-else><i class="bi bi-toggle-on me-1"></i>Disable</span>
+                      </button>
+                      <button
+                        v-else-if="player.status === 'ACTIVE'"
+                        class="btn btn-sm btn-warning"
+                        @click="disablePlayer(player)"
+                        :disabled="togglingPlayerId === player.id"
+                      >
+                        <i v-if="togglingPlayerId === player.id" class="bi bi-hourglass-split"></i>
+                        <span v-else><i class="bi bi-toggle-on me-1"></i>Disable</span>
+                      </button>
+                      <button
+                        v-else-if="player.status === 'DISABLED'"
+                        class="btn btn-sm btn-success"
+                        @click="enablePlayer(player)"
+                        :disabled="togglingPlayerId === player.id"
+                      >
+                        <i v-if="togglingPlayerId === player.id" class="bi bi-hourglass-split"></i>
+                        <span v-else><i class="bi bi-toggle-off me-1"></i>Enable</span>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="alert alert-info mb-0">
+              <i class="bi bi-inbox me-2"></i>No players added yet
             </div>
           </div>
         </div>
@@ -242,9 +311,54 @@
             </button>
           </div>
         </div>
+    </div>
+  </div>
+
+  <!-- Add Player Modal -->
+  <div v-if="showAddPlayerModal" class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Tournament Player</h5>
+          <button type="button" class="btn-close" @click="showAddPlayerModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div v-if="addPlayerError" class="alert alert-danger alert-dismissible fade show">
+            {{ addPlayerError }}
+            <button type="button" class="btn-close" @click="addPlayerError = null"></button>
+          </div>
+          <div v-if="loadingAvailablePlayers" class="text-center py-2">
+            <i class="bi bi-hourglass-split me-2"></i>Loading available players...
+          </div>
+          <div v-else class="mb-3">
+            <label for="playerSelect" class="form-label">Select Player</label>
+            <select id="playerSelect" v-model="selectedPlayerId" class="form-select">
+              <option value="">-- Choose a player --</option>
+              <option v-for="player in availablePlayers" :key="player.id" :value="player.id">
+                {{ player.firstName }} {{ player.lastName }} ({{ player.email }})
+              </option>
+            </select>
+            <div v-if="availablePlayers.length === 0" class="text-muted small mt-1">
+              No available players to add.
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="showAddPlayerModal = false">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="confirmAddPlayer"
+            :disabled="!selectedPlayerId || addingPlayer"
+          >
+            <span v-if="addingPlayer"><i class="bi bi-hourglass-split me-2"></i>Adding...</span>
+            <span v-else><i class="bi bi-check-circle me-2"></i>Add Player</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script>
@@ -265,7 +379,9 @@ export default {
     return {
       tournament: null,
       tournamentAdmins: [],
+      tournamentPlayers: [],
       availableAdmins: [],
+      availablePlayers: [],
       loading: true,
       error: null,
       successMessage: null,
@@ -274,7 +390,13 @@ export default {
       selectedAdminId: '',
       addingAdmin: false,
       addAdminError: null,
-      removingAdminId: null
+      removingAdminId: null,
+      showAddPlayerModal: false,
+      selectedPlayerId: '',
+      addingPlayer: false,
+      addPlayerError: null,
+      loadingAvailablePlayers: false,
+      togglingPlayerId: null
     }
   },
   mounted () {
@@ -333,6 +455,8 @@ export default {
       } else {
         this.tournamentAdmins = []
       }
+      // Load players from embedded players list
+      this.tournamentPlayers = this.tournament.players || []
     },
 
     async removeAdmin (adminId) {
@@ -434,6 +558,110 @@ export default {
         console.error('Error toggling tournament:', err)
       } finally {
         this.toggling = false
+      }
+    },
+
+    async openAddPlayerModal () {
+      this.showAddPlayerModal = true
+      this.selectedPlayerId = ''
+      this.addPlayerError = null
+      this.loadingAvailablePlayers = true
+      try {
+        const response = await tournamentAPI.getAvailablePlayers(this.tournament.id)
+        if (response.data.success) {
+          this.availablePlayers = response.data.users || []
+        } else {
+          this.addPlayerError = response.data.message || 'Failed to load available players'
+        }
+      } catch (err) {
+        this.addPlayerError = err.response?.data?.message || 'Error loading available players'
+        console.error('Error loading available players:', err)
+      } finally {
+        this.loadingAvailablePlayers = false
+      }
+    },
+
+    async confirmAddPlayer () {
+      if (!this.selectedPlayerId) {
+        this.addPlayerError = 'Please select a player'
+        return
+      }
+
+      this.addingPlayer = true
+      this.addPlayerError = null
+      try {
+        const response = await tournamentAPI.addTournamentPlayer(this.tournament.id, {
+          userId: parseInt(this.selectedPlayerId)
+        })
+
+        if (response.data.success) {
+          // Reload tournament to get the updated player list with status
+          const tournamentRes = await tournamentAPI.getTournamentById(this.tournament.id)
+          if (tournamentRes.data.success) {
+            this.tournament = tournamentRes.data.tournament
+            this.tournamentPlayers = this.tournament.players || []
+          }
+          this.showAddPlayerModal = false
+          this.selectedPlayerId = ''
+          this.successMessage = 'Player added successfully.'
+        } else {
+          this.addPlayerError = response.data.message || 'Failed to add player'
+        }
+      } catch (err) {
+        this.addPlayerError = err.response?.data?.message || 'Error adding player'
+        console.error('Error adding player:', err)
+      } finally {
+        this.addingPlayer = false
+      }
+    },
+
+    async enablePlayer (player) {
+      this.togglingPlayerId = player.id
+      this.error = null
+      try {
+        const response = await tournamentAPI.enablePlayer(this.tournament.id, player.id)
+        if (response.data.success) {
+          const idx = this.tournamentPlayers.findIndex(p => p.id === player.id)
+          if (idx !== -1) {
+            this.tournamentPlayers[idx] = { ...this.tournamentPlayers[idx], status: 'ENABLED', statusChangedAt: Date.now() }
+          }
+          this.successMessage = `${player.firstName} ${player.lastName} has been enabled.`
+        } else {
+          this.error = response.data.message || 'Failed to enable player'
+        }
+      } catch (err) {
+        this.error = err.response?.data?.message || 'Error enabling player'
+        console.error('Error enabling player:', err)
+      } finally {
+        this.togglingPlayerId = null
+      }
+    },
+
+    async disablePlayer (player) {
+      const confirmMsg = player.status === 'ACTIVE'
+        ? 'This player is currently ACTIVE. Disabling them may affect ongoing matches. Are you sure?'
+        : `Are you sure you want to disable ${player.firstName} ${player.lastName}?`
+
+      if (!confirm(confirmMsg)) return
+
+      this.togglingPlayerId = player.id
+      this.error = null
+      try {
+        const response = await tournamentAPI.disablePlayer(this.tournament.id, player.id)
+        if (response.data.success) {
+          const idx = this.tournamentPlayers.findIndex(p => p.id === player.id)
+          if (idx !== -1) {
+            this.tournamentPlayers[idx] = { ...this.tournamentPlayers[idx], status: 'DISABLED', statusChangedAt: Date.now() }
+          }
+          this.successMessage = `${player.firstName} ${player.lastName} has been disabled.`
+        } else {
+          this.error = response.data.message || 'Failed to disable player'
+        }
+      } catch (err) {
+        this.error = err.response?.data?.message || 'Error disabling player'
+        console.error('Error disabling player:', err)
+      } finally {
+        this.togglingPlayerId = null
       }
     },
 

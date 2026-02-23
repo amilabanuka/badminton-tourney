@@ -76,14 +76,24 @@ export const tournamentAPI = {
     return apiClient.post(`/api/tournaments/${id}/players`, data)
   },
 
+  // Get available players for a tournament (not yet added)
+  getAvailablePlayers (id) {
+    return apiClient.get(`/api/tournaments/${id}/players/available`)
+  },
+
+  // Enable a player in a tournament
+  enablePlayer (id, userId) {
+    return apiClient.post(`/api/tournaments/${id}/players/${userId}/enable`)
+  },
+
+  // Disable a player in a tournament
+  disablePlayer (id, userId) {
+    return apiClient.post(`/api/tournaments/${id}/players/${userId}/disable`)
+  },
+
   // Toggle tournament enabled/disabled
   toggleTournament (id) {
     return apiClient.patch(`/api/tournaments/${id}/toggle`)
-  },
-
-  // Remove tournament player
-  removeTournamentPlayer (id, userId) {
-    return apiClient.delete(`/api/tournaments/${id}/players/${userId}`)
   }
 }
 

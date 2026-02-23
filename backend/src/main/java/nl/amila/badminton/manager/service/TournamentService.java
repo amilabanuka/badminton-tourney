@@ -1,11 +1,13 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
+import nl.amila.badminton.manager.entity.PlayerStatus;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
 import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
@@ -21,10 +23,13 @@ import java.util.stream.Collectors;
 public class TournamentService {
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
+    private final TournamentPlayerRepository tournamentPlayerRepository;
 
-    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository) {
+    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository,
+                             TournamentPlayerRepository tournamentPlayerRepository) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
+        this.tournamentPlayerRepository = tournamentPlayerRepository;
     }
 
     /**
@@ -180,26 +185,80 @@ public class TournamentService {
     }
 
     /**
-     * Remove a tournament player
+     * Remove a tournament player — not permitted; players can only be disabled
      */
     @Transactional
     public TournamentResponse removeTournamentPlayer(Long tournamentId, Long userId) {
-        // Validate tournament exists
+        return new TournamentResponse(false, "Players cannot be removed from a tournament. Use disable instead.");
+    }
+
+    /**
+     * Get players with PLAYER role not yet in the tournament
+     */
+    public UserListResponse getAvailablePlayersForTournament(Long tournamentId) {
         Optional<Tournament> tournamentOpt = tournamentRepository.findById(tournamentId);
         if (tournamentOpt.isEmpty()) {
-            return new TournamentResponse(false, "Tournament not found");
+            return new UserListResponse(false, "Tournament not found");
         }
 
-        // Remove player from tournament's players list
-        boolean removed = tournamentOpt.get().getPlayers().removeIf(p -> p.getUser().getId().equals(userId));
+        // Collect IDs of players already in the tournament
+        List<Long> existingPlayerIds = tournamentOpt.get().getPlayers().stream()
+            .map(p -> p.getUser().getId())
+            .collect(Collectors.toList());
 
-        if (!removed) {
-            return new TournamentResponse(false, "User is not a tournament player");
+        List<User> availablePlayers = userRepository.findByRole(Role.PLAYER.name()).stream()
+            .filter(u -> !existingPlayerIds.contains(u.getId()))
+            .collect(Collectors.toList());
+
+        List<UserListResponse.UserListDto> userDtos = availablePlayers.stream()
+            .map(u -> new UserListResponse.UserListDto(
+                u.getId(), u.getUsername(), u.getEmail(), u.getFirstName(), u.getLastName()
+            ))
+            .collect(Collectors.toList());
+
+        return new UserListResponse(true, "Available players retrieved successfully", userDtos);
+    }
+
+    /**
+     * Enable a player — only valid when status is DISABLED
+     */
+    @Transactional
+    public TournamentResponse enablePlayer(Long tournamentId, Long userId) {
+        Optional<TournamentPlayer> playerOpt = tournamentPlayerRepository.findByTournamentIdAndUserId(tournamentId, userId);
+        if (playerOpt.isEmpty()) {
+            return new TournamentResponse(false, "Player is not registered in this tournament");
         }
 
-        tournamentRepository.save(tournamentOpt.get());
+        TournamentPlayer player = playerOpt.get();
+        if (player.getStatus() != PlayerStatus.DISABLED) {
+            return new TournamentResponse(false, "Player can only be enabled when currently DISABLED");
+        }
 
-        return new TournamentResponse(true, "Tournament player removed successfully");
+        player.setStatus(PlayerStatus.ENABLED);
+        tournamentPlayerRepository.save(player);
+
+        return new TournamentResponse(true, "Player enabled successfully");
+    }
+
+    /**
+     * Disable a player — valid when status is ENABLED or ACTIVE
+     */
+    @Transactional
+    public TournamentResponse disablePlayer(Long tournamentId, Long userId) {
+        Optional<TournamentPlayer> playerOpt = tournamentPlayerRepository.findByTournamentIdAndUserId(tournamentId, userId);
+        if (playerOpt.isEmpty()) {
+            return new TournamentResponse(false, "Player is not registered in this tournament");
+        }
+
+        TournamentPlayer player = playerOpt.get();
+        if (player.getStatus() == PlayerStatus.DISABLED) {
+            return new TournamentResponse(false, "Player is already DISABLED");
+        }
+
+        player.setStatus(PlayerStatus.DISABLED);
+        tournamentPlayerRepository.save(player);
+
+        return new TournamentResponse(true, "Player disabled successfully");
     }
 
     /**
@@ -287,7 +346,7 @@ public class TournamentService {
     }
 
     /**
-     * Maps a Tournament entity to a TournamentDto, including full admin details
+     * Maps a Tournament entity to a TournamentDto, including full admin and player details
      */
     private TournamentResponse.TournamentDto toDto(Tournament t) {
         TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
@@ -305,6 +364,16 @@ public class TournamentService {
                 a.getUser().getFirstName(),
                 a.getUser().getLastName(),
                 a.getUser().getEmail()
+            ))
+            .collect(Collectors.toList()));
+        dto.setPlayers(t.getPlayers().stream()
+            .map(p -> new TournamentResponse.PlayerDto(
+                p.getUser().getId(),
+                p.getUser().getFirstName(),
+                p.getUser().getLastName(),
+                p.getUser().getEmail(),
+                p.getStatus().name(),
+                p.getStatusChangedAt()
             ))
             .collect(Collectors.toList()));
         return dto;

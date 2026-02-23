@@ -87,13 +87,52 @@ public class TournamentController {
     }
 
     /**
-     * Remove tournament player (ADMIN or TOURNY_ADMIN)
+     * Remove tournament player (ADMIN or TOURNY_ADMIN) — returns 400, players cannot be removed
      */
     @DeleteMapping("/{id}/players/{userId}")
     public ResponseEntity<TournamentResponse> removeTournamentPlayer(
             @PathVariable Long id,
             @PathVariable Long userId) {
         TournamentResponse response = tournamentService.removeTournamentPlayer(id, userId);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Get available players (with PLAYER role not yet in the tournament) - ADMIN or TOURNY_ADMIN
+     */
+    @GetMapping("/{id}/players/available")
+    public ResponseEntity<UserListResponse> getAvailablePlayers(@PathVariable Long id) {
+        UserListResponse response = tournamentService.getAvailablePlayersForTournament(id);
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Enable a player in a tournament (ADMIN or TOURNY_ADMIN)
+     */
+    @PostMapping("/{id}/players/{userId}/enable")
+    public ResponseEntity<TournamentResponse> enablePlayer(
+            @PathVariable Long id,
+            @PathVariable Long userId) {
+        TournamentResponse response = tournamentService.enablePlayer(id, userId);
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Disable a player in a tournament (ADMIN or TOURNY_ADMIN)
+     */
+    @PostMapping("/{id}/players/{userId}/disable")
+    public ResponseEntity<TournamentResponse> disablePlayer(
+            @PathVariable Long id,
+            @PathVariable Long userId) {
+        TournamentResponse response = tournamentService.disablePlayer(id, userId);
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
         } else {
