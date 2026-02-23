@@ -8,6 +8,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 
@@ -29,16 +32,22 @@ public class Tournament {
     private long createdAt;
     private long updatedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    @Setter(lombok.AccessLevel.NONE)
+    private TournamentType type;
+
     @OneToMany(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TournamentAdmin> admins = new ArrayList<>();
 
     @OneToMany(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TournamentPlayer> players = new ArrayList<>();
 
-    public Tournament(String name, Long ownerId, boolean enabled) {
+    public Tournament(String name, Long ownerId, boolean enabled, TournamentType type) {
         this.name = name;
         this.ownerId = ownerId;
         this.enabled = enabled;
+        this.type = type;
         this.createdAt = System.currentTimeMillis();
         this.updatedAt = System.currentTimeMillis();
         this.admins = new ArrayList<>();

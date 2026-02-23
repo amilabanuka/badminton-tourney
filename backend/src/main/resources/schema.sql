@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS tournament (
     name VARCHAR(255) NOT NULL UNIQUE,
     owner_id BIGINT NOT NULL,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    type VARCHAR(20) NOT NULL,
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     FOREIGN KEY (owner_id) REFERENCES users(id),

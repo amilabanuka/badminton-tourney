@@ -3,6 +3,7 @@ package nl.amila.badminton.manager.dto;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import nl.amila.badminton.manager.entity.TournamentType;
 
 import java.util.List;
 
@@ -42,18 +43,20 @@ public class TournamentResponse {
         private boolean enabled;
         private long createdAt;
         private long updatedAt;
+        private TournamentType type;
         private List<Long> adminIds;
         private List<Long> playerIds;
         private List<AdminDto> admins;
         private List<PlayerDto> players;
 
-        public TournamentDto(Long id, String name, Long ownerId, boolean enabled, long createdAt, long updatedAt) {
+        public TournamentDto(Long id, String name, Long ownerId, boolean enabled, long createdAt, long updatedAt, TournamentType type) {
             this.id = id;
             this.name = name;
             this.ownerId = ownerId;
             this.enabled = enabled;
             this.createdAt = createdAt;
             this.updatedAt = updatedAt;
+            this.type = type;
         }
     }
 

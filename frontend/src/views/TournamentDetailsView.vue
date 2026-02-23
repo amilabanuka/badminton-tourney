@@ -80,6 +80,16 @@
             </div>
             <div class="row mb-3">
               <div class="col-md-6">
+                <label class="text-muted small">Type</label>
+                <p class="mb-0">
+                  <span v-if="tournament.type === 'LEAGUE'" class="badge bg-primary">League</span>
+                  <span v-else-if="tournament.type === 'ONE_OFF'" class="badge bg-info text-dark">One-off</span>
+                  <span v-else class="badge bg-secondary">Unknown</span>
+                </p>
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-6">
                 <label class="text-muted small">Total Admins</label>
                 <p class="mb-0">{{ tournament.adminIds?.length || 0 }}</p>
               </div>

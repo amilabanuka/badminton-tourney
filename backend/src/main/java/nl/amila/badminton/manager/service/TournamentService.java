@@ -6,6 +6,7 @@ import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
 import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
+import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
@@ -44,6 +45,9 @@ public class TournamentService {
         if (request.getOwnerId() == null) {
             return new TournamentResponse(false, "Owner ID is required");
         }
+        if (request.getType() == null) {
+            return new TournamentResponse(false, "Tournament type is required");
+        }
 
         // Check if tournament name already exists
         if (tournamentRepository.existsByName(request.getName())) {
@@ -65,7 +69,8 @@ public class TournamentService {
         Tournament tournament = new Tournament(
             request.getName(),
             request.getOwnerId(),
-            request.isEnabled()
+            request.isEnabled(),
+            request.getType()
         );
 
         // Add owner as a tournament admin to the admins list
@@ -81,7 +86,8 @@ public class TournamentService {
             savedTournament.getOwnerId(),
             savedTournament.isEnabled(),
             savedTournament.getCreatedAt(),
-            savedTournament.getUpdatedAt()
+            savedTournament.getUpdatedAt(),
+            savedTournament.getType()
         );
 
         return new TournamentResponse(true, "Tournament created successfully", tournamentDto);
@@ -350,7 +356,7 @@ public class TournamentService {
      */
     private TournamentResponse.TournamentDto toDto(Tournament t) {
         TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
-            t.getId(), t.getName(), t.getOwnerId(), t.isEnabled(), t.getCreatedAt(), t.getUpdatedAt()
+            t.getId(), t.getName(), t.getOwnerId(), t.isEnabled(), t.getCreatedAt(), t.getUpdatedAt(), t.getType()
         );
         dto.setAdminIds(t.getAdmins().stream()
             .map(a -> a.getUser().getId())

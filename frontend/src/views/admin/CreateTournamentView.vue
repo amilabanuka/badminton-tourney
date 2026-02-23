@@ -60,6 +60,25 @@
                 </div>
               </div>
 
+              <!-- Tournament Type -->
+              <div class="mb-3">
+                <label for="type" class="form-label">Tournament Type <span class="text-danger">*</span></label>
+                <select
+                  id="type"
+                  v-model="form.type"
+                  class="form-select"
+                  :class="{ 'is-invalid': errors.type }"
+                  @change="validateType"
+                >
+                  <option value="">-- Select a Tournament Type --</option>
+                  <option value="LEAGUE">League</option>
+                  <option value="ONE_OFF">One-off</option>
+                </select>
+                <div v-if="errors.type" class="invalid-feedback d-block">
+                  {{ errors.type }}
+                </div>
+              </div>
+
               <!-- Enabled Status -->
               <div class="mb-3">
                 <div class="form-check form-switch">
@@ -107,7 +126,8 @@ export default {
       form: {
         name: '',
         ownerId: '',
-        enabled: true
+        enabled: true,
+        type: ''
       },
       availableAdmins: [],
       errors: {},
@@ -154,6 +174,13 @@ export default {
       }
     },
 
+    validateType () {
+      this.errors.type = ''
+      if (!this.form.type) {
+        this.errors.type = 'Tournament type is required'
+      }
+    },
+
     validateForm () {
       this.errors = {}
       let isValid = true
@@ -171,6 +198,11 @@ export default {
         isValid = false
       }
 
+      if (!this.form.type) {
+        this.errors.type = 'Tournament type is required'
+        isValid = false
+      }
+
       return isValid
     },
 
@@ -185,7 +217,8 @@ export default {
         const response = await tournamentAPI.createTournament({
           name: this.form.name.trim(),
           ownerId: parseInt(this.form.ownerId),
-          enabled: this.form.enabled
+          enabled: this.form.enabled,
+          type: this.form.type
         })
 
         if (response.data.success) {

@@ -48,6 +48,7 @@
             <thead class="table-light">
               <tr>
                 <th>Tournament Name</th>
+                <th>Type</th>
                 <th>Status</th>
                 <th>Created Date</th>
                 <th>Actions</th>
@@ -56,6 +57,11 @@
             <tbody>
               <tr v-for="tournament in tournaments" :key="tournament.id">
                 <td class="fw-bold">{{ tournament.name }}</td>
+                <td>
+                  <span v-if="tournament.type === 'LEAGUE'" class="badge bg-primary">League</span>
+                  <span v-else-if="tournament.type === 'ONE_OFF'" class="badge bg-info text-dark">One-off</span>
+                  <span v-else class="badge bg-secondary">-</span>
+                </td>
                 <td>
                   <span v-if="tournament.enabled" class="badge bg-success">Enabled</span>
                   <span v-else class="badge bg-secondary">Disabled</span>
