@@ -46,6 +46,8 @@ CREATE TABLE IF NOT EXISTS tournament_players (
     user_id BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     status_changed_at BIGINT NOT NULL,
+    `rank` INT NULL,
+    rank_score DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     UNIQUE KEY uk_tournament_user (tournament_id, user_id),
     FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

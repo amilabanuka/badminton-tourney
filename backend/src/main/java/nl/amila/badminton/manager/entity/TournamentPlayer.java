@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "tournament_players")
 @Getter
@@ -32,11 +34,21 @@ public class TournamentPlayer {
     @Column(nullable = false)
     private long statusChangedAt;
 
+    @Column(name = "`rank`")
+    private Integer rank;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal rankScore = BigDecimal.ZERO;
+
     public TournamentPlayer(Tournament tournament, User user) {
+        this(tournament, user, BigDecimal.ZERO);
+    }
+
+    public TournamentPlayer(Tournament tournament, User user, BigDecimal rankScore) {
         this.tournament = tournament;
         this.user = user;
-        this.status = PlayerStatus.ENABLED;
         this.statusChangedAt = System.currentTimeMillis();
+        this.rankScore = rankScore != null ? rankScore : BigDecimal.ZERO;
     }
 
     public void setStatus(PlayerStatus status) {

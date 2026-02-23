@@ -15,7 +15,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -161,7 +163,8 @@ public class TournamentService {
         }
 
         // Add player to tournament's players list
-        tournamentOpt.get().getPlayers().add(new TournamentPlayer(tournamentOpt.get(), userOpt.get()));
+        BigDecimal rankScore = request.getRankScore() != null ? request.getRankScore() : BigDecimal.ZERO;
+        tournamentOpt.get().getPlayers().add(new TournamentPlayer(tournamentOpt.get(), userOpt.get(), rankScore));
         tournamentRepository.save(tournamentOpt.get());
 
         return new TournamentResponse(true, "Tournament player added successfully");
@@ -373,13 +376,18 @@ public class TournamentService {
             ))
             .collect(Collectors.toList()));
         dto.setPlayers(t.getPlayers().stream()
+            .sorted(Comparator.comparing(TournamentPlayer::getRankScore,
+                        Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparing(p -> p.getUser().getId()))
             .map(p -> new TournamentResponse.PlayerDto(
                 p.getUser().getId(),
                 p.getUser().getFirstName(),
                 p.getUser().getLastName(),
                 p.getUser().getEmail(),
                 p.getStatus().name(),
-                p.getStatusChangedAt()
+                p.getStatusChangedAt(),
+                p.getRank(),
+                p.getRankScore()
             ))
             .collect(Collectors.toList()));
         return dto;

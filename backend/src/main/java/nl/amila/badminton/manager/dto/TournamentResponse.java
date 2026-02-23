@@ -5,6 +5,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import nl.amila.badminton.manager.entity.TournamentType;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -87,14 +88,18 @@ public class TournamentResponse {
         private String email;
         private String status;
         private long statusChangedAt;
+        private Integer rank;
+        private BigDecimal rankScore;
 
-        public PlayerDto(Long id, String firstName, String lastName, String email, String status, long statusChangedAt) {
+        public PlayerDto(Long id, String firstName, String lastName, String email, String status, long statusChangedAt, Integer rank, BigDecimal rankScore) {
             this.id = id;
             this.firstName = firstName;
             this.lastName = lastName;
             this.email = email;
             this.status = status;
             this.statusChangedAt = statusChangedAt;
+            this.rank = rank;
+            this.rankScore = rankScore;
         }
     }
 }

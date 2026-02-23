@@ -330,7 +330,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">Add Tournament Player</h5>
-          <button type="button" class="btn-close" @click="showAddPlayerModal = false"></button>
+          <button type="button" class="btn-close" @click="showAddPlayerModal = false; newPlayerRankScore = ''; rankScoreError = null"></button>
         </div>
         <div class="modal-body">
           <div v-if="addPlayerError" class="alert alert-danger alert-dismissible fade show">
@@ -352,9 +352,24 @@
               No available players to add.
             </div>
           </div>
+          <div v-if="!loadingAvailablePlayers" class="mb-3">
+            <label for="rankScoreInput" class="form-label">
+              Initial Rank Score <span class="text-muted small">(optional, defaults to 0.00)</span>
+            </label>
+            <input
+              id="rankScoreInput"
+              v-model="newPlayerRankScore"
+              type="number"
+              step="0.01"
+              min="0"
+              class="form-control"
+              placeholder="0.00"
+            />
+            <div v-if="rankScoreError" class="text-danger small mt-1">{{ rankScoreError }}</div>
+          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" @click="showAddPlayerModal = false">Cancel</button>
+          <button type="button" class="btn btn-secondary" @click="showAddPlayerModal = false; newPlayerRankScore = ''; rankScoreError = null">Cancel</button>
           <button
             type="button"
             class="btn btn-primary"
@@ -403,6 +418,8 @@ export default {
       removingAdminId: null,
       showAddPlayerModal: false,
       selectedPlayerId: '',
+      newPlayerRankScore: '',
+      rankScoreError: null,
       addingPlayer: false,
       addPlayerError: null,
       loadingAvailablePlayers: false,
@@ -574,6 +591,8 @@ export default {
     async openAddPlayerModal () {
       this.showAddPlayerModal = true
       this.selectedPlayerId = ''
+      this.newPlayerRankScore = ''
+      this.rankScoreError = null
       this.addPlayerError = null
       this.loadingAvailablePlayers = true
       try {
@@ -597,12 +616,25 @@ export default {
         return
       }
 
+      this.rankScoreError = null
+      let rankScore = null
+      if (this.newPlayerRankScore !== '' && this.newPlayerRankScore !== null) {
+        const parsed = parseFloat(this.newPlayerRankScore)
+        if (isNaN(parsed) || parsed < 0) {
+          this.rankScoreError = 'Rank score must be a non-negative number'
+          return
+        }
+        rankScore = parseFloat(parsed.toFixed(2))
+      }
+
       this.addingPlayer = true
       this.addPlayerError = null
       try {
-        const response = await tournamentAPI.addTournamentPlayer(this.tournament.id, {
-          userId: parseInt(this.selectedPlayerId)
-        })
+        const payload = { userId: parseInt(this.selectedPlayerId) }
+        if (rankScore !== null) {
+          payload.rankScore = rankScore
+        }
+        const response = await tournamentAPI.addTournamentPlayer(this.tournament.id, payload)
 
         if (response.data.success) {
           // Reload tournament to get the updated player list with status
@@ -613,6 +645,7 @@ export default {
           }
           this.showAddPlayerModal = false
           this.selectedPlayerId = ''
+          this.newPlayerRankScore = ''
           this.successMessage = 'Player added successfully.'
         } else {
           this.addPlayerError = response.data.message || 'Failed to add player'

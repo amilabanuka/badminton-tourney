@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +45,7 @@ class TournamentServiceTest {
     private User adminUser;
     private User tournamentAdminUser;
     private User playerUser;
+    private User playerUser2;
     private Tournament tournament;
 
     @BeforeEach
@@ -59,6 +61,10 @@ class TournamentServiceTest {
         playerUser = new User("player", "player@example.com", "password", "Player", "User");
         playerUser.setId(3L);
         playerUser.setRole(Role.PLAYER);
+
+        playerUser2 = new User("player2", "player2@example.com", "password", "Player", "Two");
+        playerUser2.setId(4L);
+        playerUser2.setRole(Role.PLAYER);
 
         tournament = new Tournament("Spring Championship", 2L, true, TournamentType.ONE_OFF);
         tournament.setId(1L);
@@ -355,6 +361,120 @@ class TournamentServiceTest {
         assertNotNull(response.getUsers());
         assertEquals(1, response.getUsers().size());
         assertEquals("tourny_admin", response.getUsers().get(0).getUsername());
+    }
+
+    // -------------------------------------------------------------------------
+    // addTournamentPlayer — rankScore
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testAddTournamentPlayer_DefaultsRankScoreToZeroWhenNotProvided() {
+        AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(3L); // no rankScore
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
+        when(tournamentRepository.save(any(Tournament.class))).thenAnswer(inv -> {
+            Tournament saved = inv.getArgument(0);
+            TournamentPlayer added = saved.getPlayers().get(saved.getPlayers().size() - 1);
+            assertEquals(BigDecimal.ZERO, added.getRankScore());
+            return saved;
+        });
+
+        TournamentResponse response = tournamentService.addTournamentPlayer(1L, request);
+
+        assertTrue(response.isSuccess());
+    }
+
+    @Test
+    void testAddTournamentPlayer_UsesProvidedRankScore() {
+        BigDecimal score = new BigDecimal("15.75");
+        AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(3L, score);
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
+        when(tournamentRepository.save(any(Tournament.class))).thenAnswer(inv -> {
+            Tournament saved = inv.getArgument(0);
+            TournamentPlayer added = saved.getPlayers().get(saved.getPlayers().size() - 1);
+            assertEquals(score, added.getRankScore());
+            return saved;
+        });
+
+        TournamentResponse response = tournamentService.addTournamentPlayer(1L, request);
+
+        assertTrue(response.isSuccess());
+    }
+
+    // -------------------------------------------------------------------------
+    // toDto — player sort order (rankScore desc, userId asc)
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testGetTournamentById_PlayersSortedByRankScoreDescThenUserIdAsc() {
+        // player3 score=5.00, player4 score=10.00 → expected order: player4, player3
+        TournamentPlayer tp1 = new TournamentPlayer(tournament, playerUser, new BigDecimal("5.00"));
+        TournamentPlayer tp2 = new TournamentPlayer(tournament, playerUser2, new BigDecimal("10.00"));
+        tournament.getPlayers().add(tp1);
+        tournament.getPlayers().add(tp2);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
+
+        assertTrue(response.isSuccess());
+        List<TournamentResponse.PlayerDto> players = response.getTournament().getPlayers();
+        assertEquals(2, players.size());
+        assertEquals(playerUser2.getId(), players.get(0).getId());   // score 10.00 first
+        assertEquals(playerUser.getId(), players.get(1).getId());    // score  5.00 second
+    }
+
+    @Test
+    void testGetTournamentById_PlayersTieOnRankScore_SortedByUserIdAsc() {
+        // Both players have score=7.50 → sorted by userId asc (3 before 4)
+        TournamentPlayer tp1 = new TournamentPlayer(tournament, playerUser, new BigDecimal("7.50"));
+        TournamentPlayer tp2 = new TournamentPlayer(tournament, playerUser2, new BigDecimal("7.50"));
+        tournament.getPlayers().add(tp2); // add higher-id first to ensure sort is applied
+        tournament.getPlayers().add(tp1);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
+
+        assertTrue(response.isSuccess());
+        List<TournamentResponse.PlayerDto> players = response.getTournament().getPlayers();
+        assertEquals(2, players.size());
+        assertEquals(playerUser.getId(), players.get(0).getId());    // id=3 before id=4
+        assertEquals(playerUser2.getId(), players.get(1).getId());
+    }
+
+    @Test
+    void testGetTournamentById_PlayerDtoContainsRankAndRankScore() {
+        TournamentPlayer tp = new TournamentPlayer(tournament, playerUser, new BigDecimal("8.50"));
+        tp.setRank(2);
+        tournament.getPlayers().add(tp);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
+
+        TournamentResponse.PlayerDto dto = response.getTournament().getPlayers().get(0);
+        assertEquals(Integer.valueOf(2), dto.getRank());
+        assertEquals(new BigDecimal("8.50"), dto.getRankScore());
+    }
+
+    @Test
+    void testGetTournamentById_NewPlayerHasNullRankAndZeroRankScore() {
+        TournamentPlayer tp = new TournamentPlayer(tournament, playerUser); // 2-arg constructor
+        tournament.getPlayers().add(tp);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
+
+        TournamentResponse.PlayerDto dto = response.getTournament().getPlayers().get(0);
+        assertNull(dto.getRank());
+        assertEquals(BigDecimal.ZERO, dto.getRankScore());
     }
 }
 
