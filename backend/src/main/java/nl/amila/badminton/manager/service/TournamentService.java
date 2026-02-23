@@ -271,6 +271,41 @@ public class TournamentService {
     }
 
     /**
+     * Toggle tournament enabled/disabled status
+     */
+    @Transactional
+    public TournamentResponse toggleTournament(Long id) {
+        Optional<Tournament> tournamentOpt = tournamentRepository.findById(id);
+        if (tournamentOpt.isEmpty()) {
+            return new TournamentResponse(false, "Tournament not found");
+        }
+
+        Tournament tournament = tournamentOpt.get();
+        tournament.setEnabled(!tournament.isEnabled());
+        tournamentRepository.save(tournament);
+
+        String statusMsg = tournament.isEnabled() ? "enabled" : "disabled";
+        TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
+            tournament.getId(),
+            tournament.getName(),
+            tournament.getOwnerId(),
+            tournament.isEnabled(),
+            tournament.getCreatedAt(),
+            tournament.getUpdatedAt()
+        );
+        List<Long> adminIds = tournament.getAdmins().stream()
+            .map(a -> a.getUser().getId())
+            .collect(Collectors.toList());
+        List<Long> playerIds = tournament.getPlayers().stream()
+            .map(p -> p.getUser().getId())
+            .collect(Collectors.toList());
+        dto.setAdminIds(adminIds);
+        dto.setPlayerIds(playerIds);
+
+        return new TournamentResponse(true, "Tournament " + statusMsg + " successfully", dto);
+    }
+
+    /**
      * Get users by role
      */
     public UserListResponse getUsersByRole(String role) {

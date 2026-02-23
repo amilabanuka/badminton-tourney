@@ -100,6 +100,19 @@ public class TournamentController {
     }
 
     /**
+     * Toggle tournament enabled/disabled (ADMIN only)
+     */
+    @PatchMapping("/{id}/toggle")
+    public ResponseEntity<TournamentResponse> toggleTournament(@PathVariable Long id) {
+        TournamentResponse response = tournamentService.toggleTournament(id);
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+    }
+
+    /**
      * Get all tournaments (authenticated users)
      */
     @GetMapping

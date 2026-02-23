@@ -76,6 +76,11 @@ export const tournamentAPI = {
     return apiClient.post(`/api/tournaments/${id}/players`, data)
   },
 
+  // Toggle tournament enabled/disabled
+  toggleTournament (id) {
+    return apiClient.patch(`/api/tournaments/${id}/toggle`)
+  },
+
   // Remove tournament player
   removeTournamentPlayer (id, userId) {
     return apiClient.delete(`/api/tournaments/${id}/players/${userId}`)
