@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import store from '../store'
 
 const routes = [
   {
@@ -10,16 +11,78 @@ const routes = [
   {
     path: '/about',
     name: 'about',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue')
+    component: () => import('../views/AboutView.vue')
+  },
+  {
+    path: '/signup',
+    name: 'signup',
+    component: () => import('../views/SignUpView.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/LoginView.vue'),
+    meta: { guest: true }
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('../views/DashboardView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tournaments',
+    name: 'tournaments',
+    component: () => import('../views/TournamentListView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tournaments/:id',
+    name: 'tournament-details',
+    component: () => import('../views/TournamentDetailsView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin/tournaments/create',
+    name: 'create-tournament',
+    component: () => import('../views/admin/CreateTournamentView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes
+})
+
+// Navigation guard
+router.beforeEach((to, from, next) => {
+  // Check authentication from store
+  store.dispatch('auth/checkAuth')
+
+  const isAuthenticated = store.getters['auth/isAuthenticated']
+  const isAdmin = store.getters['auth/isAdmin']
+
+  // Redirect to dashboard if authenticated user tries to access guest pages
+  if (to.meta.guest && isAuthenticated) {
+    next('/dashboard')
+    return
+  }
+
+  // Check if route requires authentication
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next('/login')
+    return
+  }
+
+  // Check if route requires admin role
+  if (to.meta.requiresAdmin && !isAdmin) {
+    next('/dashboard')
+    return
+  }
+
+  next()
 })
 
 export default router

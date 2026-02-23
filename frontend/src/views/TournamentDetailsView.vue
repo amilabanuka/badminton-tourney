@@ -1,0 +1,24 @@
+<template>
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <h1 class="mb-4">Tournament Details</h1>
+
+        <div class="alert alert-info">
+          <i class="bi bi-info-circle me-2"></i>
+          Tournament details page will be implemented in Phase 2
+        </div>
+
+        <router-link to="/tournaments" class="btn btn-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Back to Tournaments
+        </router-link>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'TournamentDetailsView'
+}
+</script>
