@@ -23,12 +23,12 @@
             <router-link class="nav-link" to="/">Home</router-link>
           </li>
 
-          <li v-if="isAuthenticated" class="nav-item">
+          <li v-if="isAuthenticated && !isAdmin" class="nav-item">
             <router-link class="nav-link" to="/tournaments">Tournaments</router-link>
           </li>
 
           <li v-if="isAdmin" class="nav-item">
-            <router-link class="nav-link" to="/admin/tournaments/create">Create Tournament</router-link>
+            <router-link class="nav-link" to="/admin/tournaments">Admin Panel</router-link>
           </li>
         </ul>
 

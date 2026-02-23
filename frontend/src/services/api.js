@@ -39,4 +39,47 @@ apiClient.interceptors.response.use(
   }
 )
 
+// Tournament API methods
+export const tournamentAPI = {
+  // Get all tournaments
+  getTournaments () {
+    return apiClient.get('/api/tournaments')
+  },
+
+  // Get tournament by ID
+  getTournamentById (id) {
+    return apiClient.get(`/api/tournaments/${id}`)
+  },
+
+  // Create tournament
+  createTournament (data) {
+    return apiClient.post('/api/tournaments', data)
+  },
+
+  // Get available tournament admins
+  getAvailableAdmins () {
+    return apiClient.get('/api/tournaments/admins/available')
+  },
+
+  // Add tournament admin
+  addTournamentAdmin (id, data) {
+    return apiClient.post(`/api/tournaments/${id}/admins`, data)
+  },
+
+  // Remove tournament admin
+  removeTournamentAdmin (id, userId) {
+    return apiClient.delete(`/api/tournaments/${id}/admins/${userId}`)
+  },
+
+  // Add tournament player
+  addTournamentPlayer (id, data) {
+    return apiClient.post(`/api/tournaments/${id}/players`, data)
+  },
+
+  // Remove tournament player
+  removeTournamentPlayer (id, userId) {
+    return apiClient.delete(`/api/tournaments/${id}/players/${userId}`)
+  }
+}
+
 export default apiClient

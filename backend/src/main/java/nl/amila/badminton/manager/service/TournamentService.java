@@ -3,10 +3,11 @@ package nl.amila.badminton.manager.service;
 import nl.amila.badminton.manager.dto.*;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
+import nl.amila.badminton.manager.entity.TournamentAdmin;
+import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.User;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +20,10 @@ import java.util.stream.Collectors;
 public class TournamentService {
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
-    private final JdbcTemplate jdbcTemplate;
 
-    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository, JdbcTemplate jdbcTemplate) {
+    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
-        this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
@@ -63,8 +62,12 @@ public class TournamentService {
             request.isEnabled()
         );
 
+        // Add owner as a tournament admin to the admins list
+        tournament.getAdmins().add(new TournamentAdmin(tournament, owner));
+
         Tournament savedTournament = tournamentRepository.save(tournament);
 
+        // Return success response
         // Return success response
         TournamentResponse.TournamentDto tournamentDto = new TournamentResponse.TournamentDto(
             savedTournament.getId(),
@@ -101,23 +104,16 @@ public class TournamentService {
         }
 
         // Check if user is already an admin
-        Integer count = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
-            Integer.class,
-            tournamentId,
-            request.getUserId()
-        );
+        boolean alreadyAdmin = tournamentOpt.get().getAdmins().stream()
+            .anyMatch(a -> a.getUser().getId().equals(request.getUserId()));
 
-        if (count != null && count > 0) {
+        if (alreadyAdmin) {
             return new TournamentResponse(false, "User is already a tournament admin");
         }
 
-        // Add admin
-        jdbcTemplate.update(
-            "INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)",
-            tournamentId,
-            request.getUserId()
-        );
+        // Add admin to tournament's admins list
+        tournamentOpt.get().getAdmins().add(new TournamentAdmin(tournamentOpt.get(), userOpt.get()));
+        tournamentRepository.save(tournamentOpt.get());
 
         return new TournamentResponse(true, "Tournament admin added successfully");
     }
@@ -145,23 +141,16 @@ public class TournamentService {
         }
 
         // Check if user is already a player
-        Integer count = jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM tournament_players WHERE tournament_id = ? AND user_id = ?",
-            Integer.class,
-            tournamentId,
-            request.getUserId()
-        );
+        boolean alreadyPlayer = tournamentOpt.get().getPlayers().stream()
+            .anyMatch(p -> p.getUser().getId().equals(request.getUserId()));
 
-        if (count != null && count > 0) {
+        if (alreadyPlayer) {
             return new TournamentResponse(false, "User is already a tournament player");
         }
 
-        // Add player
-        jdbcTemplate.update(
-            "INSERT INTO tournament_players (tournament_id, user_id) VALUES (?, ?)",
-            tournamentId,
-            request.getUserId()
-        );
+        // Add player to tournament's players list
+        tournamentOpt.get().getPlayers().add(new TournamentPlayer(tournamentOpt.get(), userOpt.get()));
+        tournamentRepository.save(tournamentOpt.get());
 
         return new TournamentResponse(true, "Tournament player added successfully");
     }
@@ -177,16 +166,14 @@ public class TournamentService {
             return new TournamentResponse(false, "Tournament not found");
         }
 
-        // Remove admin
-        int rowsAffected = jdbcTemplate.update(
-            "DELETE FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
-            tournamentId,
-            userId
-        );
+        // Remove admin from tournament's admins list
+        boolean removed = tournamentOpt.get().getAdmins().removeIf(a -> a.getUser().getId().equals(userId));
 
-        if (rowsAffected == 0) {
+        if (!removed) {
             return new TournamentResponse(false, "User is not a tournament admin");
         }
+
+        tournamentRepository.save(tournamentOpt.get());
 
         return new TournamentResponse(true, "Tournament admin removed successfully");
     }
@@ -202,16 +189,14 @@ public class TournamentService {
             return new TournamentResponse(false, "Tournament not found");
         }
 
-        // Remove player
-        int rowsAffected = jdbcTemplate.update(
-            "DELETE FROM tournament_players WHERE tournament_id = ? AND user_id = ?",
-            tournamentId,
-            userId
-        );
+        // Remove player from tournament's players list
+        boolean removed = tournamentOpt.get().getPlayers().removeIf(p -> p.getUser().getId().equals(userId));
 
-        if (rowsAffected == 0) {
+        if (!removed) {
             return new TournamentResponse(false, "User is not a tournament player");
         }
+
+        tournamentRepository.save(tournamentOpt.get());
 
         return new TournamentResponse(true, "Tournament player removed successfully");
     }
@@ -234,17 +219,13 @@ public class TournamentService {
                     t.getUpdatedAt()
                 );
 
-                // Get admin and player IDs
-                List<Long> adminIds = jdbcTemplate.queryForList(
-                    "SELECT user_id FROM tournament_admins WHERE tournament_id = ?",
-                    Long.class,
-                    t.getId()
-                );
-                List<Long> playerIds = jdbcTemplate.queryForList(
-                    "SELECT user_id FROM tournament_players WHERE tournament_id = ?",
-                    Long.class,
-                    t.getId()
-                );
+                // Get admin and player IDs from tournament's collections
+                List<Long> adminIds = t.getAdmins().stream()
+                    .map(a -> a.getUser().getId())
+                    .collect(Collectors.toList());
+                List<Long> playerIds = t.getPlayers().stream()
+                    .map(p -> p.getUser().getId())
+                    .collect(Collectors.toList());
 
                 dto.setAdminIds(adminIds);
                 dto.setPlayerIds(playerIds);
@@ -275,17 +256,13 @@ public class TournamentService {
             tournament.getUpdatedAt()
         );
 
-        // Get admin and player IDs
-        List<Long> adminIds = jdbcTemplate.queryForList(
-            "SELECT user_id FROM tournament_admins WHERE tournament_id = ?",
-            Long.class,
-            tournament.getId()
-        );
-        List<Long> playerIds = jdbcTemplate.queryForList(
-            "SELECT user_id FROM tournament_players WHERE tournament_id = ?",
-            Long.class,
-            tournament.getId()
-        );
+        // Get admin and player IDs from tournament's collections
+        List<Long> adminIds = tournament.getAdmins().stream()
+            .map(a -> a.getUser().getId())
+            .collect(Collectors.toList());
+        List<Long> playerIds = tournament.getPlayers().stream()
+            .map(p -> p.getUser().getId())
+            .collect(Collectors.toList());
 
         dto.setAdminIds(adminIds);
         dto.setPlayerIds(playerIds);

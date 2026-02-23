@@ -44,9 +44,21 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/admin/tournaments',
+    name: 'admin-tournaments',
+    component: () => import('../views/admin/AdminTournamentsListView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
     path: '/admin/tournaments/create',
     name: 'create-tournament',
     component: () => import('../views/admin/CreateTournamentView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/admin/tournaments/:id',
+    name: 'admin-tournament-details',
+    component: () => import('../views/admin/AdminTournamentDetailsView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]
@@ -64,8 +76,14 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = store.getters['auth/isAuthenticated']
   const isAdmin = store.getters['auth/isAdmin']
 
-  // Redirect to dashboard if authenticated user tries to access guest pages
-  if (to.meta.guest && isAuthenticated) {
+  // Redirect authenticated admins from home/dashboard to admin panel
+  if (isAuthenticated && isAdmin && (to.path === '/' || to.path === '/dashboard')) {
+    next('/admin/tournaments')
+    return
+  }
+
+  // Redirect to dashboard if authenticated non-admin user tries to access guest pages
+  if (to.meta.guest && isAuthenticated && !isAdmin) {
     next('/dashboard')
     return
   }

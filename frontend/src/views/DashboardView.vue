@@ -29,7 +29,7 @@
       </div>
 
       <div v-if="isAdmin" class="col-md-4 mb-3">
-        <div class="card action-card h-100" @click="$router.push('/tournaments')">
+        <div class="card action-card h-100" @click="$router.push('/admin/tournaments')">
           <div class="card-body text-center">
             <i class="bi bi-gear fs-1 text-success mb-3"></i>
             <h5 class="card-title">Manage Tournaments</h5>

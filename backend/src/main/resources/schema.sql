@@ -30,18 +30,20 @@ CREATE TABLE IF NOT EXISTS tournament (
 
 -- Create tournament_admins junction table
 CREATE TABLE IF NOT EXISTS tournament_admins (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     tournament_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    PRIMARY KEY (tournament_id, user_id),
+    UNIQUE KEY uk_tournament_user (tournament_id, user_id),
     FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Create tournament_players junction table
 CREATE TABLE IF NOT EXISTS tournament_players (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     tournament_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    PRIMARY KEY (tournament_id, user_id),
+    UNIQUE KEY uk_tournament_user (tournament_id, user_id),
     FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
