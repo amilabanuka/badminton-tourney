@@ -53,6 +53,25 @@ public class GameDayResponse {
         private Long id;
         private int groupNumber;
         private List<GroupPlayerDto> players;
+        private List<MatchDto> matches;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class MatchDto {
+        private Long id;
+        private int matchOrder;
+        private Long team1Player1Id;
+        private String team1Player1Name;
+        private Long team1Player2Id;
+        private String team1Player2Name;
+        private Long team2Player1Id;
+        private String team2Player1Name;
+        private Long team2Player2Id;
+        private String team2Player2Name;
+        private Integer team1Score;
+        private Integer team2Score;
     }
 
     @Getter

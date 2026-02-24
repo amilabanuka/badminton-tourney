@@ -6,8 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "league_game_day")
@@ -39,7 +39,7 @@ public class LeagueGameDay {
 
     @OneToMany(mappedBy = "gameDay", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("group_number ASC")
-    private List<LeagueGameDayGroup> groups = new ArrayList<>();
+    private Set<LeagueGameDayGroup> groups = new LinkedHashSet<>();
 
     public LeagueGameDay(Tournament tournament, LocalDate gameDate) {
         this.tournament = tournament;

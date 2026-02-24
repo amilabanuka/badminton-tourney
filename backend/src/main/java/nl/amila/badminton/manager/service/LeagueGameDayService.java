@@ -2,12 +2,13 @@ package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.CreateGameDayRequest;
 import nl.amila.badminton.manager.dto.GameDayResponse;
+import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.entity.*;
+import nl.amila.badminton.manager.repository.LeagueGameDayGroupMatchRepository;
 import nl.amila.badminton.manager.repository.LeagueGameDayRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,15 +30,18 @@ public class LeagueGameDayService {
     private final TournamentRepository tournamentRepository;
     private final TournamentPlayerRepository tournamentPlayerRepository;
     private final LeagueGameDayRepository leagueGameDayRepository;
+    private final LeagueGameDayGroupMatchRepository matchRepository;
     private final UserRepository userRepository;
 
     public LeagueGameDayService(TournamentRepository tournamentRepository,
                                 TournamentPlayerRepository tournamentPlayerRepository,
                                 LeagueGameDayRepository leagueGameDayRepository,
+                                LeagueGameDayGroupMatchRepository matchRepository,
                                 UserRepository userRepository) {
         this.tournamentRepository = tournamentRepository;
         this.tournamentPlayerRepository = tournamentPlayerRepository;
         this.leagueGameDayRepository = leagueGameDayRepository;
+        this.matchRepository = matchRepository;
         this.userRepository = userRepository;
     }
 
@@ -162,7 +166,12 @@ public class LeagueGameDayService {
         // Compute randomised group sizes
         List<Integer> groupSizes = computeGroupSizes(n);
 
-        // Build the game day and groups
+        // Pre-check for duplicate date to avoid a constraint violation inside the transaction
+        if (leagueGameDayRepository.existsByTournamentIdAndGameDate(tournamentId, gameDate)) {
+            return new GameDayResponse(false, "A game day already exists for " + gameDate + " in this tournament");
+        }
+
+        // Build the game day and groups (players only — no matches yet)
         LeagueGameDay gameDay = new LeagueGameDay(tournament, gameDate);
         int playerIndex = 0;
         for (int g = 0; g < groupSizes.size(); g++) {
@@ -174,20 +183,25 @@ public class LeagueGameDayService {
             gameDay.getGroups().add(group);
         }
 
-        // Persist — catch duplicate date constraint
-        try {
-            LeagueGameDay saved = leagueGameDayRepository.save(gameDay);
-            return new GameDayResponse(true, "Game day created successfully", toDto(saved));
-        } catch (DataIntegrityViolationException e) {
-            return new GameDayResponse(false, "A game day already exists for " + gameDate + " in this tournament");
+        // First save: persists game day, groups, and group players — all get DB-assigned ids
+        LeagueGameDay saved = leagueGameDayRepository.save(gameDay);
+
+        // Second pass: generate match combinations now that group players have ids
+        for (LeagueGameDayGroup group : saved.getGroups()) {
+            generateMatches(group);
         }
+        // Save again to persist the matches (cascade ALL on matches covers this)
+        saved = leagueGameDayRepository.save(saved);
+
+        return new GameDayResponse(true, "Game day created successfully", toDto(saved));
     }
 
     /**
      * Get a game day by id. Only accessible by ADMIN or TOURNY_ADMIN of the tournament.
      */
+    @Transactional(readOnly = true)
     public GameDayResponse getGameDay(Long tournamentId, Long dayId, String callerUsername) {
-        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findById(dayId);
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
         if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
             return new GameDayResponse(false, "Game day not found");
         }
@@ -223,7 +237,7 @@ public class LeagueGameDayService {
      */
     @Transactional
     public GameDayResponse startGameDay(Long tournamentId, Long dayId, String callerUsername) {
-        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findById(dayId);
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
         if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
             return new GameDayResponse(false, "Game day not found");
         }
@@ -261,6 +275,122 @@ public class LeagueGameDayService {
     }
 
     /**
+     * Cancel a game day: PENDING or ONGOING → delete (cascade removes all groups, players, and matches).
+     */
+    @Transactional
+    public GameDayResponse cancelGameDay(Long tournamentId, Long dayId, String callerUsername) {
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findById(dayId);
+        if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new GameDayResponse(false, "Game day not found");
+        }
+        LeagueGameDay day = dayOpt.get();
+        if (!isAuthorized(day.getTournament(), callerUsername)) {
+            return new GameDayResponse(false, "Access denied");
+        }
+        if (day.getStatus() == GameDayStatus.COMPLETED) {
+            return new GameDayResponse(false, "Completed game days cannot be cancelled");
+        }
+        leagueGameDayRepository.delete(day);
+        return new GameDayResponse(true, "Game day cancelled successfully");
+    }
+
+    /**
+     * Submit or overwrite the score for a single match.
+     * Only allowed when the game day is ONGOING.
+     */
+    @Transactional
+    public GameDayResponse submitMatchScore(Long tournamentId, Long dayId, Long groupId, Long matchId,
+                                            SubmitMatchScoreRequest request, String callerUsername) {
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
+        if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new GameDayResponse(false, "Game day not found");
+        }
+        LeagueGameDay day = dayOpt.get();
+        if (!isAuthorized(day.getTournament(), callerUsername)) {
+            return new GameDayResponse(false, "Access denied");
+        }
+        if (day.getStatus() != GameDayStatus.ONGOING) {
+            return new GameDayResponse(false, "Scores can only be submitted for ONGOING game days");
+        }
+
+        // Validate scores
+        if (request.getTeam1Score() == null || request.getTeam2Score() == null) {
+            return new GameDayResponse(false, "Both team1Score and team2Score are required");
+        }
+        if (request.getTeam1Score() < 0 || request.getTeam2Score() < 0) {
+            return new GameDayResponse(false, "Scores must be non-negative");
+        }
+
+        // Find the match, ensure it belongs to the right group and game day
+        Optional<LeagueGameDayGroupMatch> matchOpt = matchRepository.findById(matchId);
+        if (matchOpt.isEmpty()) {
+            return new GameDayResponse(false, "Match not found");
+        }
+        LeagueGameDayGroupMatch match = matchOpt.get();
+        if (!match.getGroup().getId().equals(groupId) || !match.getGroup().getGameDay().getId().equals(dayId)) {
+            return new GameDayResponse(false, "Match does not belong to the specified group/day");
+        }
+
+        match.setTeam1Score(request.getTeam1Score());
+        match.setTeam2Score(request.getTeam2Score());
+        matchRepository.save(match);
+
+        // Re-fetch with full joins so the returned DTO reflects the updated score
+        LeagueGameDay refreshed = leagueGameDayRepository.findByIdWithAll(dayId).orElse(day);
+        return new GameDayResponse(true, "Score submitted successfully", toDto(refreshed));
+    }
+
+    /**
+     * Generate match combinations for a group.
+     * Players in the group list are already rank-sorted (index 0 = A = highest rank).
+     *
+     * Size 4 (A,B,C,D) — 3 matches:
+     *   1: A,B vs C,D
+     *   2: A,C vs B,D
+     *   3: A,D vs B,C
+     *
+     * Size 5 (A,B,C,D,E) — 5 matches:
+     *   1: A,B vs C,D
+     *   2: A,C vs B,E
+     *   3: A,E vs B,D
+     *   4: A,D vs C,E
+     *   5: B,C vs D,E
+     */
+    private void generateMatches(LeagueGameDayGroup group) {
+        // Convert Set to indexed List (insertion order preserved via LinkedHashSet + @OrderBy id ASC)
+        List<LeagueGameDayGroupPlayer> p = new ArrayList<>(group.getPlayers());
+        int size = p.size();
+
+        int[][] schedule;
+        if (size == 4) {
+            // indices: A=0, B=1, C=2, D=3
+            schedule = new int[][] {
+                {0, 1, 2, 3},   // A,B vs C,D
+                {0, 2, 1, 3},   // A,C vs B,D
+                {0, 3, 1, 2},   // A,D vs B,C
+            };
+        } else { // size == 5
+            // indices: A=0, B=1, C=2, D=3, E=4
+            schedule = new int[][] {
+                {0, 1, 2, 3},   // A,B vs C,D
+                {0, 2, 1, 4},   // A,C vs B,E
+                {0, 4, 1, 3},   // A,E vs B,D
+                {0, 3, 2, 4},   // A,D vs C,E
+                {1, 2, 3, 4},   // B,C vs D,E
+            };
+        }
+
+        for (int i = 0; i < schedule.length; i++) {
+            int[] s = schedule[i];
+            group.getMatches().add(new LeagueGameDayGroupMatch(
+                    group, i + 1,
+                    p.get(s[0]), p.get(s[1]),
+                    p.get(s[2]), p.get(s[3])
+            ));
+        }
+    }
+
+    /**
      * Map a LeagueGameDay entity to a GameDayDto.
      */
     private GameDayResponse.GameDayDto toDto(LeagueGameDay day) {
@@ -292,6 +422,31 @@ public class LeagueGameDayService {
                                     .thenComparing(GameDayResponse.GroupPlayerDto::getUserId))
                             .collect(Collectors.toList());
                     groupDto.setPlayers(playerDtos);
+
+                    List<GameDayResponse.MatchDto> matchDtos = group.getMatches().stream()
+                            .map(m -> {
+                                GameDayResponse.MatchDto mdto = new GameDayResponse.MatchDto();
+                                mdto.setId(m.getId());
+                                mdto.setMatchOrder(m.getMatchOrder());
+                                mdto.setTeam1Player1Id(m.getTeam1Player1().getTournamentPlayer().getId());
+                                mdto.setTeam1Player1Name(m.getTeam1Player1().getTournamentPlayer().getUser().getFirstName()
+                                        + " " + m.getTeam1Player1().getTournamentPlayer().getUser().getLastName());
+                                mdto.setTeam1Player2Id(m.getTeam1Player2().getTournamentPlayer().getId());
+                                mdto.setTeam1Player2Name(m.getTeam1Player2().getTournamentPlayer().getUser().getFirstName()
+                                        + " " + m.getTeam1Player2().getTournamentPlayer().getUser().getLastName());
+                                mdto.setTeam2Player1Id(m.getTeam2Player1().getTournamentPlayer().getId());
+                                mdto.setTeam2Player1Name(m.getTeam2Player1().getTournamentPlayer().getUser().getFirstName()
+                                        + " " + m.getTeam2Player1().getTournamentPlayer().getUser().getLastName());
+                                mdto.setTeam2Player2Id(m.getTeam2Player2().getTournamentPlayer().getId());
+                                mdto.setTeam2Player2Name(m.getTeam2Player2().getTournamentPlayer().getUser().getFirstName()
+                                        + " " + m.getTeam2Player2().getTournamentPlayer().getUser().getLastName());
+                                mdto.setTeam1Score(m.getTeam1Score());
+                                mdto.setTeam2Score(m.getTeam2Score());
+                                return mdto;
+                            })
+                            .collect(Collectors.toList());
+                    groupDto.setMatches(matchDtos);
+
                     return groupDto;
                 })
                 .collect(Collectors.toList());

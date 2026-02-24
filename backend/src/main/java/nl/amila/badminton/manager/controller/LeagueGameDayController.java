@@ -2,6 +2,7 @@ package nl.amila.badminton.manager.controller;
 
 import nl.amila.badminton.manager.dto.CreateGameDayRequest;
 import nl.amila.badminton.manager.dto.GameDayResponse;
+import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.service.LeagueGameDayService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -91,6 +92,42 @@ public class LeagueGameDayController {
             @PathVariable Long dayId,
             Authentication authentication) {
         GameDayResponse response = leagueGameDayService.discardGameDay(tournamentId, dayId, authentication.getName());
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Cancel a game day (PENDING or ONGOING — deletes it and all associated data)
+     */
+    @DeleteMapping("/{dayId}/cancel")
+    public ResponseEntity<GameDayResponse> cancelGameDay(
+            @PathVariable Long tournamentId,
+            @PathVariable Long dayId,
+            Authentication authentication) {
+        GameDayResponse response = leagueGameDayService.cancelGameDay(tournamentId, dayId, authentication.getName());
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    /**
+     * Submit or update the score for a match (ONGOING game days only)
+     */
+    @PutMapping("/{dayId}/groups/{groupId}/matches/{matchId}/score")
+    public ResponseEntity<GameDayResponse> submitMatchScore(
+            @PathVariable Long tournamentId,
+            @PathVariable Long dayId,
+            @PathVariable Long groupId,
+            @PathVariable Long matchId,
+            @RequestBody SubmitMatchScoreRequest request,
+            Authentication authentication) {
+        GameDayResponse response = leagueGameDayService.submitMatchScore(
+                tournamentId, dayId, groupId, matchId, request, authentication.getName());
         if (response.isSuccess()) {
             return ResponseEntity.ok(response);
         } else {

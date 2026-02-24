@@ -118,9 +118,22 @@ export const tournamentAPI = {
     return apiClient.post(`/api/tournaments/${tournamentId}/game-days/${dayId}/start`)
   },
 
-  // Discard (delete) a game day
+  // Discard (delete) a PENDING game day
   discardGameDay (tournamentId, dayId) {
     return apiClient.delete(`/api/tournaments/${tournamentId}/game-days/${dayId}`)
+  },
+
+  // Cancel (delete) a PENDING or ONGOING game day
+  cancelGameDay (tournamentId, dayId) {
+    return apiClient.delete(`/api/tournaments/${tournamentId}/game-days/${dayId}/cancel`)
+  },
+
+  // Submit or overwrite score for a match (ONGOING days only)
+  submitMatchScore (tournamentId, dayId, groupId, matchId, data) {
+    return apiClient.put(
+      `/api/tournaments/${tournamentId}/game-days/${dayId}/groups/${groupId}/matches/${matchId}/score`,
+      data
+    )
   }
 }
 
