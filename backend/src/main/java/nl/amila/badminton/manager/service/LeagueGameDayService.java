@@ -287,6 +287,9 @@ public class LeagueGameDayService {
                                 pdto.setRankScore(gp.getTournamentPlayer().getRankScore());
                                 return pdto;
                             })
+                            .sorted(Comparator.comparing(GameDayResponse.GroupPlayerDto::getRankScore,
+                                            Comparator.nullsLast(Comparator.reverseOrder()))
+                                    .thenComparing(GameDayResponse.GroupPlayerDto::getUserId))
                             .collect(Collectors.toList());
                     groupDto.setPlayers(playerDtos);
                     return groupDto;

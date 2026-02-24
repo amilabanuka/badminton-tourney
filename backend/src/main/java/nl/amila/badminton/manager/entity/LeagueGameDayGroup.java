@@ -27,6 +27,7 @@ public class LeagueGameDayGroup {
     private int groupNumber;
 
     @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("tournamentPlayer.rankScore DESC, tournamentPlayer.id ASC")
     private List<LeagueGameDayGroupPlayer> players = new ArrayList<>();
 
     public LeagueGameDayGroup(LeagueGameDay gameDay, int groupNumber) {
