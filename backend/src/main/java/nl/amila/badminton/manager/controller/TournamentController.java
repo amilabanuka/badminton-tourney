@@ -179,5 +179,26 @@ public class TournamentController {
                 .body(new TournamentResponse(false, e.getMessage()));
         }
     }
+
+    /**
+     * Update tournament settings config values (ADMIN or TOURNY_ADMIN of this tournament)
+     */
+    @PutMapping("/{id}/settings")
+    public ResponseEntity<TournamentResponse> updateTournamentSettings(
+            @PathVariable Long id,
+            @RequestBody UpdateTournamentSettingsRequest request,
+            Authentication authentication) {
+        try {
+            TournamentResponse response = tournamentService.updateTournamentSettings(id, request, authentication.getName());
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new TournamentResponse(false, e.getMessage()));
+        }
+    }
 }
 

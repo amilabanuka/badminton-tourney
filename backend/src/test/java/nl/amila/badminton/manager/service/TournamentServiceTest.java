@@ -1,12 +1,18 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
+import nl.amila.badminton.manager.entity.LeagueTournamentSettings;
+import nl.amila.badminton.manager.entity.ModifiedEloConfig;
+import nl.amila.badminton.manager.entity.OneOffTournamentSettings;
+import nl.amila.badminton.manager.entity.RankingLogic;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
 import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.OneOffTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
@@ -39,6 +45,12 @@ class TournamentServiceTest {
     @Mock
     private TournamentPlayerRepository tournamentPlayerRepository;
 
+    @Mock
+    private LeagueTournamentSettingsRepository leagueSettingsRepository;
+
+    @Mock
+    private OneOffTournamentSettingsRepository oneOffSettingsRepository;
+
     @InjectMocks
     private TournamentService tournamentService;
 
@@ -47,6 +59,7 @@ class TournamentServiceTest {
     private User playerUser;
     private User playerUser2;
     private Tournament tournament;
+    private Tournament leagueTournament;
 
     @BeforeEach
     void setUp() {
@@ -68,18 +81,51 @@ class TournamentServiceTest {
 
         tournament = new Tournament("Spring Championship", 2L, true, TournamentType.ONE_OFF);
         tournament.setId(1L);
+
+        leagueTournament = new Tournament("Premier League", 2L, true, TournamentType.LEAGUE);
+        leagueTournament.setId(2L);
+    }
+
+    // --- helpers ---
+
+    private CreateTournamentRequest oneOffRequest(String name) {
+        CreateTournamentRequest req = new CreateTournamentRequest();
+        req.setName(name);
+        req.setOwnerId(2L);
+        req.setEnabled(true);
+        req.setType(TournamentType.ONE_OFF);
+        OneOffSettingsRequest os = new OneOffSettingsRequest();
+        os.setNumberOfRounds(1);
+        os.setMaxPoints(21);
+        req.setOneOffSettings(os);
+        return req;
+    }
+
+    private CreateTournamentRequest leagueRequest(String name) {
+        CreateTournamentRequest req = new CreateTournamentRequest();
+        req.setName(name);
+        req.setOwnerId(2L);
+        req.setEnabled(true);
+        req.setType(TournamentType.LEAGUE);
+        LeagueSettingsRequest ls = new LeagueSettingsRequest();
+        ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
+        ls.setK(32);
+        ls.setAbsenteeDemerit(5);
+        req.setLeagueSettings(ls);
+        return req;
     }
 
     // -------------------------------------------------------------------------
-    // createTournament
+    // createTournament — existing tests (updated to use helper / setter pattern)
     // -------------------------------------------------------------------------
 
     @Test
     void testCreateTournament_Success() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true, TournamentType.ONE_OFF);
+        CreateTournamentRequest request = oneOffRequest("Spring Championship");
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
         when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
+        when(oneOffSettingsRepository.save(any(OneOffTournamentSettings.class))).thenReturn(null);
 
         TournamentResponse response = tournamentService.createTournament(request);
 
@@ -88,11 +134,15 @@ class TournamentServiceTest {
         assertNotNull(response.getTournament());
         assertEquals("Spring Championship", response.getTournament().getName());
         verify(tournamentRepository, times(1)).save(any(Tournament.class));
+        verify(oneOffSettingsRepository, times(1)).save(any(OneOffTournamentSettings.class));
     }
 
     @Test
     void testCreateTournament_NameAlreadyExists() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 2L, true, TournamentType.ONE_OFF);
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Spring Championship");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(true);
 
         TournamentResponse response = tournamentService.createTournament(request);
@@ -104,7 +154,10 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_OwnerNotFound() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 999L, true, TournamentType.ONE_OFF);
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Spring Championship");
+        request.setOwnerId(999L);
+        request.setType(TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
@@ -116,7 +169,10 @@ class TournamentServiceTest {
 
     @Test
     void testCreateTournament_OwnerNotTournyAdmin() {
-        CreateTournamentRequest request = new CreateTournamentRequest("Spring Championship", 3L, true, TournamentType.ONE_OFF);
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Spring Championship");
+        request.setOwnerId(3L);
+        request.setType(TournamentType.ONE_OFF);
         when(tournamentRepository.existsByName("Spring Championship")).thenReturn(false);
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
 
@@ -127,12 +183,330 @@ class TournamentServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // createTournament — LEAGUE settings validation
+    // -------------------------------------------------------------------------
+
+    @Test
+    void createTournament_league_validEloSettings_savesLeagueSettingsAndReturnsSuccess() {
+        CreateTournamentRequest request = leagueRequest("Premier League");
+        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(leagueTournament);
+        when(leagueSettingsRepository.save(any(LeagueTournamentSettings.class))).thenReturn(null);
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertTrue(response.isSuccess());
+        verify(leagueSettingsRepository, times(1)).save(any(LeagueTournamentSettings.class));
+        verify(oneOffSettingsRepository, never()).save(any());
+    }
+
+    @Test
+    void createTournament_league_missingLeagueSettings_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Premier League");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.LEAGUE);
+        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("League settings are required", response.getMessage());
+        verify(tournamentRepository, never()).save(any());
+    }
+
+    @Test
+    void createTournament_league_nullRankingLogic_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Premier League");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.LEAGUE);
+        LeagueSettingsRequest ls = new LeagueSettingsRequest();
+        ls.setK(32);
+        ls.setAbsenteeDemerit(5);
+        // rankingLogic is null
+        request.setLeagueSettings(ls);
+        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("Ranking logic is required", response.getMessage());
+    }
+
+    @Test
+    void createTournament_league_zeroK_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Premier League");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.LEAGUE);
+        LeagueSettingsRequest ls = new LeagueSettingsRequest();
+        ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
+        ls.setK(0);
+        ls.setAbsenteeDemerit(5);
+        request.setLeagueSettings(ls);
+        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("k must be a positive integer", response.getMessage());
+    }
+
+    @Test
+    void createTournament_league_negativeAbsenteeDemerit_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Premier League");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.LEAGUE);
+        LeagueSettingsRequest ls = new LeagueSettingsRequest();
+        ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
+        ls.setK(32);
+        ls.setAbsenteeDemerit(-1);
+        request.setLeagueSettings(ls);
+        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("Absentee demerit must be non-negative", response.getMessage());
+    }
+
+    // -------------------------------------------------------------------------
+    // createTournament — ONE_OFF settings validation
+    // -------------------------------------------------------------------------
+
+    @Test
+    void createTournament_oneOff_validSettings_savesOneOffSettingsAndReturnsSuccess() {
+        CreateTournamentRequest request = oneOffRequest("Summer Open");
+        when(tournamentRepository.existsByName("Summer Open")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
+        when(oneOffSettingsRepository.save(any(OneOffTournamentSettings.class))).thenReturn(null);
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertTrue(response.isSuccess());
+        verify(oneOffSettingsRepository, times(1)).save(any(OneOffTournamentSettings.class));
+        verify(leagueSettingsRepository, never()).save(any());
+    }
+
+    @Test
+    void createTournament_oneOff_missingOneOffSettings_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Summer Open");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.ONE_OFF);
+        when(tournamentRepository.existsByName("Summer Open")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("One-off settings are required", response.getMessage());
+        verify(tournamentRepository, never()).save(any());
+    }
+
+    @Test
+    void createTournament_oneOff_invalidMaxPoints_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Summer Open");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.ONE_OFF);
+        OneOffSettingsRequest os = new OneOffSettingsRequest();
+        os.setNumberOfRounds(3);
+        os.setMaxPoints(30); // invalid
+        request.setOneOffSettings(os);
+        when(tournamentRepository.existsByName("Summer Open")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("Max points must be 15 or 21", response.getMessage());
+    }
+
+    @Test
+    void createTournament_oneOff_zeroRounds_returnsError() {
+        CreateTournamentRequest request = new CreateTournamentRequest();
+        request.setName("Summer Open");
+        request.setOwnerId(2L);
+        request.setType(TournamentType.ONE_OFF);
+        OneOffSettingsRequest os = new OneOffSettingsRequest();
+        os.setNumberOfRounds(0);
+        os.setMaxPoints(21);
+        request.setOneOffSettings(os);
+        when(tournamentRepository.existsByName("Summer Open")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(request);
+
+        assertFalse(response.isSuccess());
+        assertEquals("Number of rounds must be positive", response.getMessage());
+    }
+
+    // -------------------------------------------------------------------------
+    // getTournamentById — settings included in detail response
+    // -------------------------------------------------------------------------
+
+    @Test
+    void getTournamentById_leagueTournament_includesEloSettingsInDto() {
+        LeagueTournamentSettings ls = new LeagueTournamentSettings(
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+        leagueTournament.setLeagueSettings(ls);
+
+        when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(2L, "admin");
+
+        assertTrue(response.isSuccess());
+        TournamentResponse.TournamentSettingsDto settings = response.getTournament().getSettings();
+        assertNotNull(settings);
+        assertEquals(RankingLogic.MODIFIED_ELO, settings.getRankingLogic());
+        assertEquals(32, settings.getK());
+        assertEquals(5, settings.getAbsenteeDemerit());
+        assertNull(settings.getNumberOfRounds());
+        assertNull(settings.getMaxPoints());
+    }
+
+    @Test
+    void getTournamentById_oneOffTournament_includesOneOffSettingsInDto() {
+        OneOffTournamentSettings os = new OneOffTournamentSettings(tournament, 3, 21);
+        tournament.setOneOffSettings(os);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        TournamentResponse response = tournamentService.getTournamentById(1L, "admin");
+
+        assertTrue(response.isSuccess());
+        TournamentResponse.TournamentSettingsDto settings = response.getTournament().getSettings();
+        assertNotNull(settings);
+        assertEquals(3, settings.getNumberOfRounds());
+        assertEquals(21, settings.getMaxPoints());
+        assertNull(settings.getRankingLogic());
+        assertNull(settings.getK());
+    }
+
+    // -------------------------------------------------------------------------
+    // updateTournamentSettings
+    // -------------------------------------------------------------------------
+
+    @Test
+    void updateTournamentSettings_league_validRequest_updatesConfigAndReturnsDto() {
+        LeagueTournamentSettings ls = new LeagueTournamentSettings(
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+        leagueTournament.setLeagueSettings(ls);
+
+        UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
+        request.setK(20);
+        request.setAbsenteeDemerit(10);
+
+        when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+        when(leagueSettingsRepository.findByTournamentId(2L)).thenReturn(Optional.of(ls));
+        when(leagueSettingsRepository.save(any(LeagueTournamentSettings.class))).thenReturn(ls);
+        when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(2L, request, "admin");
+
+        assertTrue(response.isSuccess());
+        assertEquals("Tournament settings updated successfully", response.getMessage());
+        verify(leagueSettingsRepository, times(1)).save(any(LeagueTournamentSettings.class));
+    }
+
+    @Test
+    void updateTournamentSettings_league_invalidK_returnsError() {
+        LeagueTournamentSettings ls = new LeagueTournamentSettings(
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+
+        UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
+        request.setK(0);
+        request.setAbsenteeDemerit(5);
+
+        when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+        when(leagueSettingsRepository.findByTournamentId(2L)).thenReturn(Optional.of(ls));
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(2L, request, "admin");
+
+        assertFalse(response.isSuccess());
+        assertEquals("k must be a positive integer", response.getMessage());
+        verify(leagueSettingsRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTournamentSettings_oneOff_validRequest_updatesFieldsAndReturnsDto() {
+        OneOffTournamentSettings os = new OneOffTournamentSettings(tournament, 1, 21);
+        tournament.setOneOffSettings(os);
+
+        UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
+        request.setNumberOfRounds(5);
+        request.setMaxPoints(15);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+        when(oneOffSettingsRepository.findByTournamentId(1L)).thenReturn(Optional.of(os));
+        when(oneOffSettingsRepository.save(any(OneOffTournamentSettings.class))).thenReturn(os);
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(1L, request, "admin");
+
+        assertTrue(response.isSuccess());
+        verify(oneOffSettingsRepository, times(1)).save(any(OneOffTournamentSettings.class));
+    }
+
+    @Test
+    void updateTournamentSettings_oneOff_invalidMaxPoints_returnsError() {
+        OneOffTournamentSettings os = new OneOffTournamentSettings(tournament, 1, 21);
+
+        UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
+        request.setNumberOfRounds(3);
+        request.setMaxPoints(30);
+
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+        when(oneOffSettingsRepository.findByTournamentId(1L)).thenReturn(Optional.of(os));
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(1L, request, "admin");
+
+        assertFalse(response.isSuccess());
+        assertEquals("Max points must be 15 or 21", response.getMessage());
+        verify(oneOffSettingsRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTournamentSettings_tournamentNotFound_returnsError() {
+        when(tournamentRepository.findById(99L)).thenReturn(Optional.empty());
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(
+            99L, new UpdateTournamentSettingsRequest(), "admin");
+
+        assertFalse(response.isSuccess());
+        assertEquals("Tournament not found", response.getMessage());
+    }
+
+    @Test
+    void updateTournamentSettings_tourneyAdminNotOfThisTournament_throwsAccessDenied() {
+        // tourny_admin is NOT in the tournament's admins list
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+
+        assertThrows(AccessDeniedException.class,
+            () -> tournamentService.updateTournamentSettings(1L, new UpdateTournamentSettingsRequest(), "tourny_admin"));
+    }
+
+    // -------------------------------------------------------------------------
     // addTournamentAdmin
     // -------------------------------------------------------------------------
 
     @Test
     void testAddTournamentAdmin_Success() {
-        // Tournament has no admins yet so the duplicate check passes
         AddTournamentAdminRequest request = new AddTournamentAdminRequest(2L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
@@ -159,7 +533,6 @@ class TournamentServiceTest {
 
     @Test
     void testAddTournamentAdmin_AlreadyAdmin() {
-        // Pre-seed the tournament's admins list
         tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
         AddTournamentAdminRequest request = new AddTournamentAdminRequest(2L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
@@ -208,7 +581,6 @@ class TournamentServiceTest {
 
     @Test
     void testRemoveTournamentAdmin_Success() {
-        // Pre-seed the admins list so removeIf finds the entry
         tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(tournamentRepository.save(any(Tournament.class))).thenReturn(tournament);
@@ -222,7 +594,6 @@ class TournamentServiceTest {
 
     @Test
     void testRemoveTournamentAdmin_NotFound() {
-        // Empty admins list — user is not an admin
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
 
         TournamentResponse response = tournamentService.removeTournamentAdmin(1L, 99L);
@@ -238,7 +609,6 @@ class TournamentServiceTest {
 
     @Test
     void testRemoveTournamentPlayer_AlwaysReturnsFalse() {
-        // Player removal is intentionally blocked regardless of whether the player exists
         TournamentResponse response = tournamentService.removeTournamentPlayer(1L, 3L);
 
         assertFalse(response.isSuccess());
@@ -272,14 +642,12 @@ class TournamentServiceTest {
         assertEquals("Tournaments retrieved successfully", response.getMessage());
         assertNotNull(response.getTournaments());
         assertEquals(1, response.getTournaments().size());
-        // ADMIN path: findAll called, findByAdminsUserId never called
         verify(tournamentRepository, times(1)).findAll();
         verify(tournamentRepository, never()).findByAdminsUserId(anyLong());
     }
 
     @Test
     void testGetTournaments_AsTournyAdmin_ReturnsOnlyOwn() {
-        // Seed the tournament so tourny_admin is an admin of it
         tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
         when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
         when(tournamentRepository.findByAdminsUserId(2L)).thenReturn(List.of(tournament));
@@ -289,7 +657,6 @@ class TournamentServiceTest {
         assertTrue(response.isSuccess());
         assertEquals(1, response.getTournaments().size());
         assertEquals("Spring Championship", response.getTournaments().get(0).getName());
-        // TOURNY_ADMIN path: findByAdminsUserId called, findAll never called
         verify(tournamentRepository, times(1)).findByAdminsUserId(2L);
         verify(tournamentRepository, never()).findAll();
     }
@@ -313,7 +680,6 @@ class TournamentServiceTest {
 
     @Test
     void testGetTournamentById_AsTournyAdmin_IsAdmin_Success() {
-        // tourny_admin is in the admins list → access granted
         tournament.getAdmins().add(new TournamentAdmin(tournament, tournamentAdminUser));
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
@@ -326,7 +692,6 @@ class TournamentServiceTest {
 
     @Test
     void testGetTournamentById_AsTournyAdmin_NotAdmin_Throws403() {
-        // tourny_admin is NOT in the admins list → AccessDeniedException
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
 
@@ -369,7 +734,7 @@ class TournamentServiceTest {
 
     @Test
     void testAddTournamentPlayer_DefaultsRankScoreToZeroWhenNotProvided() {
-        AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(3L); // no rankScore
+        AddTournamentPlayerRequest request = new AddTournamentPlayerRequest(3L);
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
         when(userRepository.findById(3L)).thenReturn(Optional.of(playerUser));
         when(tournamentRepository.save(any(Tournament.class))).thenAnswer(inv -> {
@@ -408,7 +773,6 @@ class TournamentServiceTest {
 
     @Test
     void testGetTournamentById_PlayersSortedByRankScoreDescThenUserIdAsc() {
-        // player3 score=5.00, player4 score=10.00 → expected order: player4, player3
         TournamentPlayer tp1 = new TournamentPlayer(tournament, playerUser, new BigDecimal("5.00"));
         TournamentPlayer tp2 = new TournamentPlayer(tournament, playerUser2, new BigDecimal("10.00"));
         tournament.getPlayers().add(tp1);
@@ -422,16 +786,15 @@ class TournamentServiceTest {
         assertTrue(response.isSuccess());
         List<TournamentResponse.PlayerDto> players = response.getTournament().getPlayers();
         assertEquals(2, players.size());
-        assertEquals(playerUser2.getId(), players.get(0).getId());   // score 10.00 first
-        assertEquals(playerUser.getId(), players.get(1).getId());    // score  5.00 second
+        assertEquals(playerUser2.getId(), players.get(0).getId());
+        assertEquals(playerUser.getId(), players.get(1).getId());
     }
 
     @Test
     void testGetTournamentById_PlayersTieOnRankScore_SortedByUserIdAsc() {
-        // Both players have score=7.50 → sorted by userId asc (3 before 4)
         TournamentPlayer tp1 = new TournamentPlayer(tournament, playerUser, new BigDecimal("7.50"));
         TournamentPlayer tp2 = new TournamentPlayer(tournament, playerUser2, new BigDecimal("7.50"));
-        tournament.getPlayers().add(tp2); // add higher-id first to ensure sort is applied
+        tournament.getPlayers().add(tp2);
         tournament.getPlayers().add(tp1);
 
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
@@ -442,7 +805,7 @@ class TournamentServiceTest {
         assertTrue(response.isSuccess());
         List<TournamentResponse.PlayerDto> players = response.getTournament().getPlayers();
         assertEquals(2, players.size());
-        assertEquals(playerUser.getId(), players.get(0).getId());    // id=3 before id=4
+        assertEquals(playerUser.getId(), players.get(0).getId());
         assertEquals(playerUser2.getId(), players.get(1).getId());
     }
 
@@ -464,7 +827,7 @@ class TournamentServiceTest {
 
     @Test
     void testGetTournamentById_NewPlayerHasNullRankAndZeroRankScore() {
-        TournamentPlayer tp = new TournamentPlayer(tournament, playerUser); // 2-arg constructor
+        TournamentPlayer tp = new TournamentPlayer(tournament, playerUser);
         tournament.getPlayers().add(tp);
 
         when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
@@ -477,4 +840,3 @@ class TournamentServiceTest {
         assertEquals(BigDecimal.ZERO, dto.getRankScore());
     }
 }
-

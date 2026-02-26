@@ -56,6 +56,11 @@ export const tournamentAPI = {
     return apiClient.post('/api/tournaments', data)
   },
 
+  // Update tournament settings (config values only, not ranking logic type)
+  updateTournamentSettings (id, data) {
+    return apiClient.put(`/api/tournaments/${id}/settings`, data)
+  },
+
   // Get available tournament admins
   getAvailableAdmins () {
     return apiClient.get('/api/tournaments/admins/available')
