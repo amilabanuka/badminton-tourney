@@ -79,6 +79,75 @@
                 </div>
               </div>
 
+              <!-- League Settings -->
+              <div v-if="showLeagueSettings" class="mb-3 p-3 border rounded bg-light">
+                <h6 class="mb-3">League Settings</h6>
+                <div class="mb-3">
+                  <label class="form-label">Ranking Logic</label>
+                  <p class="form-control-plaintext fw-bold mb-0">Modified ELO</p>
+                </div>
+                <div class="mb-3">
+                  <label for="k" class="form-label">K Factor <span class="text-danger">*</span></label>
+                  <input
+                    id="k"
+                    v-model.number="form.k"
+                    type="number"
+                    min="1"
+                    class="form-control"
+                    :class="{ 'is-invalid': errors.k }"
+                    placeholder="e.g. 32"
+                  >
+                  <div class="form-text">Controls how much a single match affects rankings. Typical value: 32.</div>
+                  <div v-if="errors.k" class="invalid-feedback d-block">{{ errors.k }}</div>
+                </div>
+                <div class="mb-0">
+                  <label for="absenteeDemerit" class="form-label">Absentee Demerit <span class="text-danger">*</span></label>
+                  <input
+                    id="absenteeDemerit"
+                    v-model.number="form.absenteeDemerit"
+                    type="number"
+                    min="0"
+                    class="form-control"
+                    :class="{ 'is-invalid': errors.absenteeDemerit }"
+                    placeholder="e.g. 10"
+                  >
+                  <div class="form-text">Points deducted when a player is absent. Use 0 for no penalty.</div>
+                  <div v-if="errors.absenteeDemerit" class="invalid-feedback d-block">{{ errors.absenteeDemerit }}</div>
+                </div>
+              </div>
+
+              <!-- One-off Settings -->
+              <div v-if="showOneOffSettings" class="mb-3 p-3 border rounded bg-light">
+                <h6 class="mb-3">One-off Settings</h6>
+                <div class="mb-3">
+                  <label for="numberOfRounds" class="form-label">Number of Rounds <span class="text-danger">*</span></label>
+                  <input
+                    id="numberOfRounds"
+                    v-model.number="form.numberOfRounds"
+                    type="number"
+                    min="1"
+                    class="form-control"
+                    :class="{ 'is-invalid': errors.numberOfRounds }"
+                    placeholder="e.g. 3"
+                  >
+                  <div v-if="errors.numberOfRounds" class="invalid-feedback d-block">{{ errors.numberOfRounds }}</div>
+                </div>
+                <div class="mb-0">
+                  <label for="maxPoints" class="form-label">Max Points Per Game <span class="text-danger">*</span></label>
+                  <select
+                    id="maxPoints"
+                    v-model.number="form.maxPoints"
+                    class="form-select"
+                    :class="{ 'is-invalid': errors.maxPoints }"
+                  >
+                    <option value="">-- Select --</option>
+                    <option :value="15">15</option>
+                    <option :value="21">21</option>
+                  </select>
+                  <div v-if="errors.maxPoints" class="invalid-feedback d-block">{{ errors.maxPoints }}</div>
+                </div>
+              </div>
+
               <!-- Enabled Status -->
               <div class="mb-3">
                 <div class="form-check form-switch">
@@ -127,7 +196,11 @@ export default {
         name: '',
         ownerId: '',
         enabled: true,
-        type: ''
+        type: '',
+        k: '',
+        absenteeDemerit: '',
+        numberOfRounds: '',
+        maxPoints: ''
       },
       availableAdmins: [],
       errors: {},
@@ -135,6 +208,26 @@ export default {
       successMessage: null,
       loading: false,
       loadingAdmins: false
+    }
+  },
+  computed: {
+    showLeagueSettings () {
+      return this.form.type === 'LEAGUE'
+    },
+    showOneOffSettings () {
+      return this.form.type === 'ONE_OFF'
+    }
+  },
+  watch: {
+    'form.type' () {
+      this.form.k = ''
+      this.form.absenteeDemerit = ''
+      this.form.numberOfRounds = ''
+      this.form.maxPoints = ''
+      this.errors.k = null
+      this.errors.absenteeDemerit = null
+      this.errors.numberOfRounds = null
+      this.errors.maxPoints = null
     }
   },
   mounted () {
@@ -181,6 +274,30 @@ export default {
       }
     },
 
+    validateSettings () {
+      let isValid = true
+      if (this.form.type === 'LEAGUE') {
+        if (this.form.k === '' || this.form.k === null || this.form.k <= 0) {
+          this.errors.k = 'K factor must be a positive integer'
+          isValid = false
+        }
+        if (this.form.absenteeDemerit === '' || this.form.absenteeDemerit === null || this.form.absenteeDemerit < 0) {
+          this.errors.absenteeDemerit = 'Absentee demerit must be 0 or greater'
+          isValid = false
+        }
+      } else if (this.form.type === 'ONE_OFF') {
+        if (this.form.numberOfRounds === '' || this.form.numberOfRounds === null || this.form.numberOfRounds <= 0) {
+          this.errors.numberOfRounds = 'Number of rounds must be a positive integer'
+          isValid = false
+        }
+        if (this.form.maxPoints !== 15 && this.form.maxPoints !== 21) {
+          this.errors.maxPoints = 'Max points must be 15 or 21'
+          isValid = false
+        }
+      }
+      return isValid
+    },
+
     validateForm () {
       this.errors = {}
       let isValid = true
@@ -203,6 +320,10 @@ export default {
         isValid = false
       }
 
+      if (!this.validateSettings()) {
+        isValid = false
+      }
+
       return isValid
     },
 
@@ -214,12 +335,25 @@ export default {
       this.loading = true
       this.error = null
       try {
-        const response = await tournamentAPI.createTournament({
+        const payload = {
           name: this.form.name.trim(),
           ownerId: parseInt(this.form.ownerId),
           enabled: this.form.enabled,
           type: this.form.type
-        })
+        }
+        if (this.form.type === 'LEAGUE') {
+          payload.leagueSettings = {
+            rankingLogic: 'MODIFIED_ELO',
+            k: parseInt(this.form.k),
+            absenteeDemerit: parseInt(this.form.absenteeDemerit)
+          }
+        } else if (this.form.type === 'ONE_OFF') {
+          payload.oneOffSettings = {
+            numberOfRounds: parseInt(this.form.numberOfRounds),
+            maxPoints: parseInt(this.form.maxPoints)
+          }
+        }
+        const response = await tournamentAPI.createTournament(payload)
 
         if (response.data.success) {
           this.successMessage = 'Tournament created successfully!'

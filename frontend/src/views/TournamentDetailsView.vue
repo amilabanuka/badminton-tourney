@@ -183,7 +183,7 @@
 
       <!-- Right Column: Quick Info -->
       <div class="col-lg-4">
-        <div class="card">
+        <div class="card mb-3">
           <div class="card-header bg-light">
             <h5 class="mb-0">Summary</h5>
           </div>
@@ -217,6 +217,39 @@
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Tournament Settings (read-only) -->
+        <div v-if="tournament.settings" class="card">
+          <div class="card-header bg-light">
+            <h5 class="mb-0">Tournament Settings</h5>
+          </div>
+          <div class="card-body">
+            <template v-if="tournament.type === 'LEAGUE'">
+              <div class="mb-2">
+                <label class="text-muted small">Ranking Logic</label>
+                <p class="mb-0 fw-bold">Modified ELO</p>
+              </div>
+              <div class="mb-2">
+                <label class="text-muted small">K Factor</label>
+                <p class="mb-0">{{ tournament.settings.k }}</p>
+              </div>
+              <div class="mb-0">
+                <label class="text-muted small">Absentee Demerit</label>
+                <p class="mb-0">{{ tournament.settings.absenteeDemerit }}</p>
+              </div>
+            </template>
+            <template v-else-if="tournament.type === 'ONE_OFF'">
+              <div class="mb-2">
+                <label class="text-muted small">Number of Rounds</label>
+                <p class="mb-0">{{ tournament.settings.numberOfRounds }}</p>
+              </div>
+              <div class="mb-0">
+                <label class="text-muted small">Max Points Per Game</label>
+                <p class="mb-0">{{ tournament.settings.maxPoints }}</p>
+              </div>
+            </template>
           </div>
         </div>
       </div>

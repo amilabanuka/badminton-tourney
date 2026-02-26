@@ -241,7 +241,7 @@
 
       <!-- Right Column: Quick Info -->
       <div class="col-lg-4">
-        <div class="card">
+        <div class="card mb-3">
           <div class="card-header bg-light">
             <h5 class="mb-0">Summary</h5>
           </div>
@@ -287,6 +287,44 @@
                 </span>
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Tournament Settings Card -->
+        <div v-if="tournament.settings" id="tournament-settings-card" class="card">
+          <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Tournament Settings</h5>
+            <button class="btn btn-sm btn-outline-primary" @click="openEditSettingsModal">
+              <i class="bi bi-pencil me-1"></i>Edit
+            </button>
+          </div>
+          <div class="card-body">
+            <!-- League settings display -->
+            <template v-if="tournament.type === 'LEAGUE'">
+              <div class="mb-2">
+                <label class="text-muted small">Ranking Logic</label>
+                <p class="mb-0 fw-bold">Modified ELO</p>
+              </div>
+              <div class="mb-2">
+                <label class="text-muted small">K Factor</label>
+                <p class="mb-0">{{ tournament.settings.k }}</p>
+              </div>
+              <div class="mb-0">
+                <label class="text-muted small">Absentee Demerit</label>
+                <p class="mb-0">{{ tournament.settings.absenteeDemerit }}</p>
+              </div>
+            </template>
+            <!-- One-off settings display -->
+            <template v-else-if="tournament.type === 'ONE_OFF'">
+              <div class="mb-2">
+                <label class="text-muted small">Number of Rounds</label>
+                <p class="mb-0">{{ tournament.settings.numberOfRounds }}</p>
+              </div>
+              <div class="mb-0">
+                <label class="text-muted small">Max Points Per Game</label>
+                <p class="mb-0">{{ tournament.settings.maxPoints }}</p>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -338,6 +376,98 @@
             </button>
           </div>
         </div>
+    </div>
+  </div>
+
+  <!-- Edit Settings Modal -->
+  <div v-if="showEditSettingsModal" class="modal d-block" style="background-color: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Tournament Settings</h5>
+          <button type="button" class="btn-close" @click="showEditSettingsModal = false"></button>
+        </div>
+        <div class="modal-body">
+          <div v-if="editSettingsError" class="alert alert-danger alert-dismissible fade show">
+            {{ editSettingsError }}
+            <button type="button" class="btn-close" @click="editSettingsError = null"></button>
+          </div>
+          <!-- League settings fields -->
+          <template v-if="tournament.type === 'LEAGUE'">
+            <div class="mb-3">
+              <label class="form-label">Ranking Logic</label>
+              <p class="form-control-plaintext fw-bold mb-0">Modified ELO</p>
+              <div class="form-text">Ranking logic cannot be changed after creation.</div>
+            </div>
+            <div class="mb-3">
+              <label for="editK" class="form-label">K Factor <span class="text-danger">*</span></label>
+              <input
+                id="editK"
+                v-model.number="editSettings.k"
+                type="number"
+                min="1"
+                class="form-control"
+                :class="{ 'is-invalid': editSettingsErrors.k }"
+              >
+              <div v-if="editSettingsErrors.k" class="invalid-feedback d-block">{{ editSettingsErrors.k }}</div>
+            </div>
+            <div class="mb-0">
+              <label for="editAbsenteeDemerit" class="form-label">Absentee Demerit <span class="text-danger">*</span></label>
+              <input
+                id="editAbsenteeDemerit"
+                v-model.number="editSettings.absenteeDemerit"
+                type="number"
+                min="0"
+                class="form-control"
+                :class="{ 'is-invalid': editSettingsErrors.absenteeDemerit }"
+              >
+              <div v-if="editSettingsErrors.absenteeDemerit" class="invalid-feedback d-block">{{ editSettingsErrors.absenteeDemerit }}</div>
+            </div>
+          </template>
+          <!-- One-off settings fields -->
+          <template v-else-if="tournament.type === 'ONE_OFF'">
+            <div class="mb-3">
+              <label for="editNumberOfRounds" class="form-label">Number of Rounds <span class="text-danger">*</span></label>
+              <input
+                id="editNumberOfRounds"
+                v-model.number="editSettings.numberOfRounds"
+                type="number"
+                min="1"
+                class="form-control"
+                :class="{ 'is-invalid': editSettingsErrors.numberOfRounds }"
+              >
+              <div v-if="editSettingsErrors.numberOfRounds" class="invalid-feedback d-block">{{ editSettingsErrors.numberOfRounds }}</div>
+            </div>
+            <div class="mb-0">
+              <label for="editMaxPoints" class="form-label">Max Points Per Game <span class="text-danger">*</span></label>
+              <select
+                id="editMaxPoints"
+                v-model.number="editSettings.maxPoints"
+                class="form-select"
+                :class="{ 'is-invalid': editSettingsErrors.maxPoints }"
+              >
+                <option :value="15">15</option>
+                <option :value="21">21</option>
+              </select>
+              <div v-if="editSettingsErrors.maxPoints" class="invalid-feedback d-block">{{ editSettingsErrors.maxPoints }}</div>
+            </div>
+          </template>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="showEditSettingsModal = false">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="saveSettings"
+            :disabled="savingSettings"
+          >
+            <span v-if="savingSettings"><i class="bi bi-hourglass-split me-2"></i>Saving...</span>
+            <span v-else><i class="bi bi-check-circle me-2"></i>Save Settings</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -440,7 +570,12 @@ export default {
       addingPlayer: false,
       addPlayerError: null,
       loadingAvailablePlayers: false,
-      togglingPlayerId: null
+      togglingPlayerId: null,
+      showEditSettingsModal: false,
+      editSettings: { k: null, absenteeDemerit: null, numberOfRounds: null, maxPoints: null },
+      editSettingsErrors: {},
+      editSettingsError: null,
+      savingSettings: false
     }
   },
   mounted () {
@@ -722,6 +857,68 @@ export default {
         console.error('Error disabling player:', err)
       } finally {
         this.togglingPlayerId = null
+      }
+    },
+
+    openEditSettingsModal () {
+      const s = this.tournament.settings || {}
+      this.editSettings = {
+        k: s.k ?? null,
+        absenteeDemerit: s.absenteeDemerit ?? null,
+        numberOfRounds: s.numberOfRounds ?? null,
+        maxPoints: s.maxPoints ?? null
+      }
+      this.editSettingsErrors = {}
+      this.editSettingsError = null
+      this.showEditSettingsModal = true
+    },
+
+    async saveSettings () {
+      this.editSettingsErrors = {}
+      this.editSettingsError = null
+      let isValid = true
+
+      if (this.tournament.type === 'LEAGUE') {
+        if (!this.editSettings.k || this.editSettings.k <= 0) {
+          this.editSettingsErrors.k = 'K factor must be a positive integer'
+          isValid = false
+        }
+        if (this.editSettings.absenteeDemerit === null || this.editSettings.absenteeDemerit < 0) {
+          this.editSettingsErrors.absenteeDemerit = 'Absentee demerit must be 0 or greater'
+          isValid = false
+        }
+      } else if (this.tournament.type === 'ONE_OFF') {
+        if (!this.editSettings.numberOfRounds || this.editSettings.numberOfRounds <= 0) {
+          this.editSettingsErrors.numberOfRounds = 'Number of rounds must be a positive integer'
+          isValid = false
+        }
+        if (this.editSettings.maxPoints !== 15 && this.editSettings.maxPoints !== 21) {
+          this.editSettingsErrors.maxPoints = 'Max points must be 15 or 21'
+          isValid = false
+        }
+      }
+
+      if (!isValid) return
+
+      this.savingSettings = true
+      try {
+        const payload = this.tournament.type === 'LEAGUE'
+          ? { k: this.editSettings.k, absenteeDemerit: this.editSettings.absenteeDemerit }
+          : { numberOfRounds: this.editSettings.numberOfRounds, maxPoints: this.editSettings.maxPoints }
+
+        const response = await tournamentAPI.updateTournamentSettings(this.tournament.id, payload)
+        if (response.data.success) {
+          this.tournament = response.data.tournament
+          this.showEditSettingsModal = false
+          this.successMessage = 'Tournament settings updated successfully.'
+        } else {
+          this.editSettingsError = response.data.message || 'Failed to update settings'
+        }
+      } catch (err) {
+        this.editSettingsError = err.response?.data?.message || 'Error updating settings'
+        console.error('Error updating settings:', err)
+      } finally {
+        this.savingSettings = false
       }
     },
 
