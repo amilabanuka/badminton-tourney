@@ -1,6 +1,9 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
+import nl.amila.badminton.manager.entity.LeagueTournamentSettings;
+import nl.amila.badminton.manager.entity.ModifiedEloConfig;
+import nl.amila.badminton.manager.entity.OneOffTournamentSettings;
 import nl.amila.badminton.manager.entity.PlayerStatus;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
@@ -8,6 +11,8 @@ import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.OneOffTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
@@ -20,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,12 +33,19 @@ public class TournamentService {
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
     private final TournamentPlayerRepository tournamentPlayerRepository;
+    private final LeagueTournamentSettingsRepository leagueSettingsRepository;
+    private final OneOffTournamentSettingsRepository oneOffSettingsRepository;
 
-    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository,
-                             TournamentPlayerRepository tournamentPlayerRepository) {
+    public TournamentService(TournamentRepository tournamentRepository,
+                             UserRepository userRepository,
+                             TournamentPlayerRepository tournamentPlayerRepository,
+                             LeagueTournamentSettingsRepository leagueSettingsRepository,
+                             OneOffTournamentSettingsRepository oneOffSettingsRepository) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
         this.tournamentPlayerRepository = tournamentPlayerRepository;
+        this.leagueSettingsRepository = leagueSettingsRepository;
+        this.oneOffSettingsRepository = oneOffSettingsRepository;
     }
 
     /**
@@ -67,6 +80,35 @@ public class TournamentService {
             return new TournamentResponse(false, "Owner must have TOURNY_ADMIN role");
         }
 
+        // Validate type-specific settings
+        TournamentType type = request.getType();
+        if (type == TournamentType.LEAGUE) {
+            LeagueSettingsRequest ls = request.getLeagueSettings();
+            if (ls == null) {
+                return new TournamentResponse(false, "League settings are required");
+            }
+            if (ls.getRankingLogic() == null) {
+                return new TournamentResponse(false, "Ranking logic is required");
+            }
+            if (ls.getK() == null || ls.getK() <= 0) {
+                return new TournamentResponse(false, "k must be a positive integer");
+            }
+            if (ls.getAbsenteeDemerit() == null || ls.getAbsenteeDemerit() < 0) {
+                return new TournamentResponse(false, "Absentee demerit must be non-negative");
+            }
+        } else if (type == TournamentType.ONE_OFF) {
+            OneOffSettingsRequest os = request.getOneOffSettings();
+            if (os == null) {
+                return new TournamentResponse(false, "One-off settings are required");
+            }
+            if (os.getNumberOfRounds() == null || os.getNumberOfRounds() <= 0) {
+                return new TournamentResponse(false, "Number of rounds must be positive");
+            }
+            if (os.getMaxPoints() == null || !Set.of(15, 21).contains(os.getMaxPoints())) {
+                return new TournamentResponse(false, "Max points must be 15 or 21");
+            }
+        }
+
         // Create tournament
         Tournament tournament = new Tournament(
             request.getName(),
@@ -80,8 +122,16 @@ public class TournamentService {
 
         Tournament savedTournament = tournamentRepository.save(tournament);
 
-        // Return success response
-        // Return success response
+        // Persist type-specific settings
+        if (type == TournamentType.LEAGUE) {
+            LeagueSettingsRequest ls = request.getLeagueSettings();
+            ModifiedEloConfig config = new ModifiedEloConfig(ls.getK(), ls.getAbsenteeDemerit());
+            leagueSettingsRepository.save(new LeagueTournamentSettings(savedTournament, ls.getRankingLogic(), config));
+        } else if (type == TournamentType.ONE_OFF) {
+            OneOffSettingsRequest os = request.getOneOffSettings();
+            oneOffSettingsRepository.save(new OneOffTournamentSettings(savedTournament, os.getNumberOfRounds(), os.getMaxPoints()));
+        }
+
         TournamentResponse.TournamentDto tournamentDto = new TournamentResponse.TournamentDto(
             savedTournament.getId(),
             savedTournament.getName(),
@@ -93,6 +143,67 @@ public class TournamentService {
         );
 
         return new TournamentResponse(true, "Tournament created successfully", tournamentDto);
+    }
+
+    /**
+     * Update tournament settings (config values only; ranking logic type is immutable)
+     */
+    @Transactional
+    public TournamentResponse updateTournamentSettings(Long tournamentId, UpdateTournamentSettingsRequest request, String callerUsername) {
+        Optional<Tournament> tournamentOpt = tournamentRepository.findById(tournamentId);
+        if (tournamentOpt.isEmpty()) {
+            return new TournamentResponse(false, "Tournament not found");
+        }
+
+        Tournament tournament = tournamentOpt.get();
+
+        User caller = userRepository.findByUsername(callerUsername)
+            .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+
+        if (Role.TOURNY_ADMIN.name().equals(caller.getRole())) {
+            boolean isAdmin = tournament.getAdmins().stream()
+                .anyMatch(a -> a.getUser().getId().equals(caller.getId()));
+            if (!isAdmin) {
+                throw new AccessDeniedException("You do not have access to this tournament");
+            }
+        }
+
+        if (tournament.getType() == TournamentType.LEAGUE) {
+            Optional<LeagueTournamentSettings> settingsOpt = leagueSettingsRepository.findByTournamentId(tournamentId);
+            if (settingsOpt.isEmpty()) {
+                return new TournamentResponse(false, "League settings not found for this tournament");
+            }
+            if (request.getK() == null || request.getK() <= 0) {
+                return new TournamentResponse(false, "k must be a positive integer");
+            }
+            if (request.getAbsenteeDemerit() == null || request.getAbsenteeDemerit() < 0) {
+                return new TournamentResponse(false, "Absentee demerit must be non-negative");
+            }
+            LeagueTournamentSettings settings = settingsOpt.get();
+            settings.setRankingConfig(new ModifiedEloConfig(request.getK(), request.getAbsenteeDemerit()));
+            leagueSettingsRepository.save(settings);
+        } else if (tournament.getType() == TournamentType.ONE_OFF) {
+            Optional<OneOffTournamentSettings> settingsOpt = oneOffSettingsRepository.findByTournamentId(tournamentId);
+            if (settingsOpt.isEmpty()) {
+                return new TournamentResponse(false, "One-off settings not found for this tournament");
+            }
+            if (request.getNumberOfRounds() == null || request.getNumberOfRounds() <= 0) {
+                return new TournamentResponse(false, "Number of rounds must be positive");
+            }
+            if (request.getMaxPoints() == null || !Set.of(15, 21).contains(request.getMaxPoints())) {
+                return new TournamentResponse(false, "Max points must be 15 or 21");
+            }
+            OneOffTournamentSettings settings = settingsOpt.get();
+            settings.setNumberOfRounds(request.getNumberOfRounds());
+            settings.setMaxPoints(request.getMaxPoints());
+            oneOffSettingsRepository.save(settings);
+        }
+
+        // Reload to reflect updated settings via @OneToOne
+        Tournament reloaded = tournamentRepository.findById(tournamentId).orElseThrow();
+        TournamentResponse.TournamentDto dto = toDto(reloaded);
+        dto.setSettings(toSettingsDto(reloaded));
+        return new TournamentResponse(true, "Tournament settings updated successfully", dto);
     }
 
     /**
@@ -314,7 +425,9 @@ public class TournamentService {
             }
         }
 
-        return new TournamentResponse(true, "Tournament retrieved successfully", toDto(tournament));
+        TournamentResponse.TournamentDto dto = toDto(tournament);
+        dto.setSettings(toSettingsDto(tournament));
+        return new TournamentResponse(true, "Tournament retrieved successfully", dto);
     }
 
     /**
@@ -355,7 +468,8 @@ public class TournamentService {
     }
 
     /**
-     * Maps a Tournament entity to a TournamentDto, including full admin and player details
+     * Maps a Tournament entity to a TournamentDto, including full admin and player details.
+     * Settings are NOT included — call toSettingsDto separately when needed.
      */
     private TournamentResponse.TournamentDto toDto(Tournament t) {
         TournamentResponse.TournamentDto dto = new TournamentResponse.TournamentDto(
@@ -393,5 +507,32 @@ public class TournamentService {
             .collect(Collectors.toList()));
         return dto;
     }
-}
 
+    /**
+     * Maps a Tournament's settings to TournamentSettingsDto.
+     * Used only in detail responses.
+     */
+    private TournamentResponse.TournamentSettingsDto toSettingsDto(Tournament t) {
+        TournamentResponse.TournamentSettingsDto dto = new TournamentResponse.TournamentSettingsDto();
+        switch (t.getType()) {
+            case LEAGUE -> {
+                LeagueTournamentSettings ls = t.getLeagueSettings();
+                if (ls != null) {
+                    dto.setRankingLogic(ls.getRankingLogic());
+                    if (ls.getRankingConfig() instanceof ModifiedEloConfig elo) {
+                        dto.setK(elo.k());
+                        dto.setAbsenteeDemerit(elo.absenteeDemerit());
+                    }
+                }
+            }
+            case ONE_OFF -> {
+                OneOffTournamentSettings os = t.getOneOffSettings();
+                if (os != null) {
+                    dto.setNumberOfRounds(os.getNumberOfRounds());
+                    dto.setMaxPoints(os.getMaxPoints());
+                }
+            }
+        }
+        return dto;
+    }
+}

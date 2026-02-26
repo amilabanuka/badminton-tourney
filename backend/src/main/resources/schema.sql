@@ -87,6 +87,26 @@ CREATE TABLE IF NOT EXISTS league_game_day_group_player (
     FOREIGN KEY (tournament_player_id) REFERENCES tournament_players(id) ON DELETE CASCADE
 );
 
+-- Create tournament_league_settings table
+CREATE TABLE IF NOT EXISTS tournament_league_settings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tournament_id BIGINT NOT NULL,
+    ranking_logic VARCHAR(50) NOT NULL,
+    ranking_config TEXT NULL,
+    UNIQUE KEY uk_league_settings_tournament (tournament_id),
+    FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE
+);
+
+-- Create tournament_one_off_settings table
+CREATE TABLE IF NOT EXISTS tournament_one_off_settings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    tournament_id BIGINT NOT NULL,
+    number_of_rounds INT NOT NULL DEFAULT 1,
+    max_points INT NOT NULL DEFAULT 21,
+    UNIQUE KEY uk_one_off_settings_tournament (tournament_id),
+    FOREIGN KEY (tournament_id) REFERENCES tournament(id) ON DELETE CASCADE
+);
+
 -- Create league_game_day_group_match table
 CREATE TABLE IF NOT EXISTS league_game_day_group_match (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -3,16 +3,7 @@ package nl.amila.badminton.manager.entity;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Entity;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
+import jakarta.persistence.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +33,19 @@ public class Tournament {
 
     @OneToMany(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TournamentPlayer> players = new ArrayList<>();
+
+    @OneToOne(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
+    private LeagueTournamentSettings leagueSettings;
+
+    @OneToOne(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
+    private OneOffTournamentSettings oneOffSettings;
+
+    public Object getSettings() {
+        return switch (type) {
+            case LEAGUE -> leagueSettings;
+            case ONE_OFF -> oneOffSettings;
+        };
+    }
 
     public Tournament(String name, Long ownerId, boolean enabled, TournamentType type) {
         this.name = name;

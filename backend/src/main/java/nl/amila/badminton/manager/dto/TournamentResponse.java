@@ -3,6 +3,7 @@ package nl.amila.badminton.manager.dto;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import nl.amila.badminton.manager.entity.RankingLogic;
 import nl.amila.badminton.manager.entity.TournamentType;
 
 import java.math.BigDecimal;
@@ -49,6 +50,7 @@ public class TournamentResponse {
         private List<Long> playerIds;
         private List<AdminDto> admins;
         private List<PlayerDto> players;
+        private TournamentSettingsDto settings;
 
         public TournamentDto(Long id, String name, Long ownerId, boolean enabled, long createdAt, long updatedAt, TournamentType type) {
             this.id = id;
@@ -59,6 +61,17 @@ public class TournamentResponse {
             this.updatedAt = updatedAt;
             this.type = type;
         }
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class TournamentSettingsDto {
+        private RankingLogic rankingLogic;
+        private Integer k;
+        private Integer absenteeDemerit;
+        private Integer numberOfRounds;
+        private Integer maxPoints;
     }
 
     @Getter

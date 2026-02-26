@@ -13,13 +13,8 @@ public class CreateTournamentRequest {
     private Long ownerId;
     private boolean enabled = true;
     private TournamentType type;
-
-    public CreateTournamentRequest(String name, Long ownerId, boolean enabled, TournamentType type) {
-        this.name = name;
-        this.ownerId = ownerId;
-        this.enabled = enabled;
-        this.type = type;
-    }
+    private LeagueSettingsRequest leagueSettings;
+    private OneOffSettingsRequest oneOffSettings;
 }
 
 
