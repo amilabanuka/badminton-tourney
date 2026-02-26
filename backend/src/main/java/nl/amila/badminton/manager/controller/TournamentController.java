@@ -213,5 +213,42 @@ public class TournamentController {
                 .body(new TournamentResponse(false, e.getMessage()));
         }
     }
+
+    // ── Player-scoped endpoints ───────────────────────────────────────────────
+
+    /**
+     * Get all tournaments for the authenticated player (PLAYER role only).
+     */
+    @GetMapping("/player-list")
+    public ResponseEntity<PlayerTournamentResponse> getTournamentsForPlayer(Authentication authentication) {
+        try {
+            PlayerTournamentResponse response = tournamentService.getTournamentsForPlayer(authentication.getName());
+            return ResponseEntity.ok(response);
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new PlayerTournamentResponse(false, e.getMessage()));
+        }
+    }
+
+    /**
+     * Get a single tournament for the authenticated player (PLAYER role only).
+     * Returns slim DTO — no admin list, no settings detail.
+     */
+    @GetMapping("/{id}/player-view")
+    public ResponseEntity<PlayerTournamentResponse> getTournamentForPlayer(
+            @PathVariable Long id,
+            Authentication authentication) {
+        try {
+            PlayerTournamentResponse response = tournamentService.getTournamentForPlayer(id, authentication.getName());
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new PlayerTournamentResponse(false, e.getMessage()));
+        }
+    }
 }
 

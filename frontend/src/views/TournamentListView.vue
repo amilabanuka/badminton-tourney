@@ -50,7 +50,7 @@
                 <th>Tournament Name</th>
                 <th>Type</th>
                 <th>Status</th>
-                <th>Created Date</th>
+                <th v-if="!isPlayer">Created Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -66,7 +66,7 @@
                   <span v-if="tournament.enabled" class="badge bg-success">Enabled</span>
                   <span v-else class="badge bg-secondary">Disabled</span>
                 </td>
-                <td>{{ formatDate(tournament.createdAt) }}</td>
+                <td v-if="!isPlayer">{{ formatDate(tournament.createdAt) }}</td>
                 <td>
                   <button
                     class="btn btn-sm btn-info me-2"
@@ -125,7 +125,7 @@ export default {
     }
   },
   computed: {
-    ...mapGetters('auth', ['isAdmin'])
+    ...mapGetters('auth', ['isAdmin', 'isPlayer'])
   },
   mounted () {
     this.loadTournaments()
@@ -135,11 +135,21 @@ export default {
       this.loading = true
       this.error = null
       try {
-        const response = await tournamentAPI.getTournaments()
-        if (response.data.success) {
-          this.tournaments = response.data.tournaments || []
+        let response
+        if (this.isPlayer) {
+          response = await tournamentAPI.getTournamentPlayerList()
+          if (response.data.success) {
+            this.tournaments = response.data.tournaments || []
+          } else {
+            this.error = response.data.message || 'Failed to load tournaments'
+          }
         } else {
-          this.error = response.data.message || 'Failed to load tournaments'
+          response = await tournamentAPI.getTournaments()
+          if (response.data.success) {
+            this.tournaments = response.data.tournaments || []
+          } else {
+            this.error = response.data.message || 'Failed to load tournaments'
+          }
         }
       } catch (err) {
         this.error = err.response?.data?.message || 'Error loading tournaments'
@@ -170,7 +180,11 @@ export default {
     },
 
     viewDetails (id) {
-      this.$router.push(`/tournaments/${id}`)
+      if (this.isPlayer) {
+        this.$router.push(`/tournaments/${id}/player-view`)
+      } else {
+        this.$router.push(`/tournaments/${id}`)
+      }
     },
 
     formatDate (timestamp) {

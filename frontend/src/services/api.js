@@ -149,6 +149,36 @@ export const tournamentAPI = {
   // Get public rankings for a tournament (no auth required)
   getPublicRankings (tournamentId) {
     return apiClient.get(`/api/tournaments/${tournamentId}/rankings`)
+  },
+
+  // ── Player-scoped endpoints ───────────────────────────────────────────────
+
+  // Get all tournaments for the authenticated player
+  getTournamentPlayerList () {
+    return apiClient.get('/api/tournaments/player-list')
+  },
+
+  // Get slim tournament detail for the authenticated player
+  getTournamentPlayerView (id) {
+    return apiClient.get(`/api/tournaments/${id}/player-view`)
+  },
+
+  // Get all game days for a tournament (player view)
+  getGameDaysForPlayer (tournamentId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/game-days/player-list`)
+  },
+
+  // Get a specific game day for the authenticated player (filtered to their group)
+  getGameDayForPlayer (tournamentId, dayId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/game-days/${dayId}/player-view`)
+  },
+
+  // Submit match score as a player (one-time, first submission wins)
+  submitPlayerMatchScore (tournamentId, dayId, groupId, matchId, data) {
+    return apiClient.put(
+      `/api/tournaments/${tournamentId}/game-days/${dayId}/groups/${groupId}/matches/${matchId}/player-score`,
+      data
+    )
   }
 }
 

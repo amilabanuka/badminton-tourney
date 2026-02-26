@@ -78,6 +78,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/tournaments/*/players/**").hasAnyRole("ADMIN", "TOURNY_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/settings").hasAnyRole("ADMIN", "TOURNY_ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/*/rankings").permitAll()
+
+                // Player-only tournament endpoints (must be before the broad admin GET matcher)
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/player-list").hasRole("PLAYER")
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/*/player-view").hasRole("PLAYER")
+
+                // Player-only game-day endpoints
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/*/game-days/player-list").hasRole("PLAYER")
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/*/game-days/*/player-view").hasRole("PLAYER")
+                .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/game-days/*/groups/*/matches/*/player-score").hasRole("PLAYER")
+
+                // Admin/TournyAdmin game-day and tournament GET endpoints
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/**").hasAnyRole("ADMIN", "TOURNY_ADMIN")
 
                 // All other requests require authentication

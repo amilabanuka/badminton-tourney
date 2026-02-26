@@ -11,6 +11,8 @@ import nl.amila.badminton.manager.repository.RankScoreHistoryRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -561,6 +563,159 @@ public class LeagueGameDayService {
                 .collect(Collectors.toList());
         dto.setGroups(groupDtos);
         return dto;
+    }
+
+    // ── Player-scoped game day methods ────────────────────────────────────────
+
+    /**
+     * Resolve the calling user, verify PLAYER role, and confirm they are a non-DISABLED
+     * TournamentPlayer in the given tournament. Returns the TournamentPlayer.
+     */
+    private TournamentPlayer resolveRegisteredPlayer(Long tournamentId, String callerUsername) {
+        User caller = userRepository.findByUsername(callerUsername)
+            .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        if (!Role.PLAYER.name().equals(caller.getRole())) {
+            throw new AccessDeniedException("Only players can access this resource");
+        }
+        TournamentPlayer tp = tournamentPlayerRepository
+            .findByTournamentIdAndUserId(tournamentId, caller.getId())
+            .orElseThrow(() -> new AccessDeniedException("You are not registered in this tournament"));
+        if (tp.getStatus() == PlayerStatus.DISABLED) {
+            throw new AccessDeniedException("Your participation in this tournament has been disabled");
+        }
+        return tp;
+    }
+
+    /**
+     * Get all game days for a tournament (player view).
+     * Returns game days ordered ONGOING first, then by date descending.
+     */
+    @Transactional(readOnly = true)
+    public GameDayResponse getGameDaysForPlayer(Long tournamentId, String callerUsername) {
+        Optional<Tournament> tournamentOpt = tournamentRepository.findById(tournamentId);
+        if (tournamentOpt.isEmpty()) {
+            return new GameDayResponse(false, "Tournament not found");
+        }
+        try {
+            resolveRegisteredPlayer(tournamentId, callerUsername);
+        } catch (AccessDeniedException e) {
+            return new GameDayResponse(false, e.getMessage());
+        }
+        List<GameDayResponse.GameDayDto> dtos = leagueGameDayRepository
+            .findByTournamentIdOrderByGameDateDesc(tournamentId)
+            .stream()
+            .map(this::toDto)
+            .sorted(Comparator.comparing(
+                (GameDayResponse.GameDayDto d) -> "ONGOING".equals(d.getStatus()) ? 0 : 1))
+            .collect(Collectors.toList());
+        return new GameDayResponse(true, "Game days retrieved successfully", dtos);
+    }
+
+    /**
+     * Get a specific game day for a player — filters groups/matches to only those
+     * containing the calling player.
+     */
+    @Transactional(readOnly = true)
+    public GameDayResponse getGameDayForPlayer(Long tournamentId, Long dayId, String callerUsername) {
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
+        if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new GameDayResponse(false, "Game day not found");
+        }
+        TournamentPlayer tp;
+        try {
+            tp = resolveRegisteredPlayer(tournamentId, callerUsername);
+        } catch (AccessDeniedException e) {
+            return new GameDayResponse(false, e.getMessage());
+        }
+        LeagueGameDay day = dayOpt.get();
+        GameDayResponse.GameDayDto dto = toDto(day);
+
+        // Filter to only groups that contain this player
+        Long callerTpId = tp.getId();
+        List<GameDayResponse.GroupDto> filtered = dto.getGroups().stream()
+            .filter(g -> g.getPlayers().stream()
+                .anyMatch(p -> callerTpId.equals(p.getTournamentPlayerId())))
+            .collect(Collectors.toList());
+        dto.setGroups(filtered);
+
+        return new GameDayResponse(true, "Game day retrieved successfully", dto);
+    }
+
+    /**
+     * Submit match score as a player.
+     * Rules:
+     *  - Caller must be one of the four players in the match.
+     *  - Score may only be set once (code-level check); @Version provides DB-level race guard.
+     */
+    @Transactional
+    public GameDayResponse submitMatchScoreAsPlayer(Long tournamentId, Long dayId, Long groupId,
+                                                    Long matchId, SubmitMatchScoreRequest request,
+                                                    String callerUsername) {
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
+        if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new GameDayResponse(false, "Game day not found");
+        }
+        TournamentPlayer tp;
+        try {
+            tp = resolveRegisteredPlayer(tournamentId, callerUsername);
+        } catch (AccessDeniedException e) {
+            return new GameDayResponse(false, e.getMessage());
+        }
+        LeagueGameDay day = dayOpt.get();
+        if (day.getStatus() != GameDayStatus.ONGOING) {
+            return new GameDayResponse(false, "Scores can only be submitted for ONGOING game days");
+        }
+
+        // Validate scores
+        if (request.getTeam1Score() == null || request.getTeam2Score() == null) {
+            return new GameDayResponse(false, "Both team1Score and team2Score are required");
+        }
+        if (request.getTeam1Score() < 0 || request.getTeam2Score() < 0) {
+            return new GameDayResponse(false, "Scores must be non-negative");
+        }
+
+        Optional<LeagueGameDayGroupMatch> matchOpt = matchRepository.findById(matchId);
+        if (matchOpt.isEmpty()) {
+            return new GameDayResponse(false, "Match not found");
+        }
+        LeagueGameDayGroupMatch match = matchOpt.get();
+        if (!match.getGroup().getId().equals(groupId) || !match.getGroup().getGameDay().getId().equals(dayId)) {
+            return new GameDayResponse(false, "Match does not belong to the specified group/day");
+        }
+
+        // Verify caller is one of the four players in this match
+        Long tpId = tp.getId();
+        boolean isParticipant = tpId.equals(match.getTeam1Player1().getTournamentPlayer().getId())
+            || tpId.equals(match.getTeam1Player2().getTournamentPlayer().getId())
+            || tpId.equals(match.getTeam2Player1().getTournamentPlayer().getId())
+            || tpId.equals(match.getTeam2Player2().getTournamentPlayer().getId());
+        if (!isParticipant) {
+            return new GameDayResponse(false, "You are not a participant in this match");
+        }
+
+        // Code-level lock: reject if score already set
+        if (match.getTeam1Score() != null) {
+            return new GameDayResponse(false, "Score has already been submitted for this match");
+        }
+
+        match.setTeam1Score(request.getTeam1Score());
+        match.setTeam2Score(request.getTeam2Score());
+        // @Version on the entity provides DB-level optimistic lock —
+        // a concurrent save will throw ObjectOptimisticLockingFailureException (caught in controller)
+        matchRepository.save(match);
+
+        LeagueGameDay refreshed = leagueGameDayRepository.findByIdWithAll(dayId).orElse(day);
+        GameDayResponse.GameDayDto dto = toDto(refreshed);
+
+        // Return only the caller's groups
+        Long callerTpId = tp.getId();
+        List<GameDayResponse.GroupDto> filtered = dto.getGroups().stream()
+            .filter(g -> g.getPlayers().stream()
+                .anyMatch(p -> callerTpId.equals(p.getTournamentPlayerId())))
+            .collect(Collectors.toList());
+        dto.setGroups(filtered);
+
+        return new GameDayResponse(true, "Score submitted successfully", dto);
     }
 }
 

@@ -78,6 +78,18 @@ const routes = [
     name: 'tournament-rankings',
     component: () => import('../views/TournamentRankingsView.vue')
     // no meta.requiresAuth — publicly accessible without login
+  },
+  {
+    path: '/tournaments/:id/player-view',
+    name: 'player-tournament-view',
+    component: () => import('../views/PlayerTournamentView.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tournaments/:id/game-days/:dayId',
+    name: 'player-league-day-view',
+    component: () => import('../views/PlayerLeagueDayView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
@@ -94,10 +106,17 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = store.getters['auth/isAuthenticated']
   const isAdmin = store.getters['auth/isAdmin']
   const isTournyAdmin = store.getters['auth/isTournyAdmin']
+  const isPlayer = store.getters['auth/isPlayer']
 
   // Redirect authenticated admins and tourny admins from home/dashboard to admin panel
   if (isAuthenticated && (isAdmin || isTournyAdmin) && (to.path === '/' || to.path === '/dashboard')) {
     next('/admin/tournaments')
+    return
+  }
+
+  // Redirect authenticated players from home/dashboard to tournaments list
+  if (isAuthenticated && isPlayer && (to.path === '/' || to.path === '/dashboard')) {
+    next('/tournaments')
     return
   }
 
@@ -119,9 +138,9 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // Check if route requires admin role (ADMIN or TOURNY_ADMIN)
+  // Check if route requires admin role (ADMIN or TOURNY_ADMIN) — block players
   if (to.meta.requiresAdmin && !isAdmin && !isTournyAdmin) {
-    next('/dashboard')
+    next('/tournaments')
     return
   }
 

@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS league_game_day_group_match (
     team2_player2_id BIGINT NOT NULL,
     team1_score INT NULL,
     team2_score INT NULL,
+    version BIGINT NOT NULL DEFAULT 0,
     FOREIGN KEY (group_id) REFERENCES league_game_day_group(id) ON DELETE CASCADE,
     FOREIGN KEY (team1_player1_id) REFERENCES league_game_day_group_player(id) ON DELETE CASCADE,
     FOREIGN KEY (team1_player2_id) REFERENCES league_game_day_group_player(id) ON DELETE CASCADE,

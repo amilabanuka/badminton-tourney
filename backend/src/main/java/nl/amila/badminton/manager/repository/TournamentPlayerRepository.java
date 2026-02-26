@@ -11,5 +11,6 @@ import java.util.Optional;
 public interface TournamentPlayerRepository extends JpaRepository<TournamentPlayer, Long> {
     Optional<TournamentPlayer> findByTournamentIdAndUserId(Long tournamentId, Long userId);
     List<TournamentPlayer> findByTournamentIdOrderByRankScoreDescUserIdAsc(Long tournamentId);
+    List<TournamentPlayer> findByUserId(Long userId);
 }
 

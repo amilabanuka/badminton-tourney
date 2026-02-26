@@ -45,6 +45,10 @@ public class LeagueGameDayGroupMatch {
     @Column(name = "team2_score")
     private Integer team2Score;
 
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
+
     public LeagueGameDayGroupMatch(LeagueGameDayGroup group, int matchOrder,
                                    LeagueGameDayGroupPlayer team1Player1,
                                    LeagueGameDayGroupPlayer team1Player2,

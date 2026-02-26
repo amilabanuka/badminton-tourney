@@ -11,6 +11,7 @@ import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.LeagueGameDayRepository;
 import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.OneOffTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
@@ -35,17 +36,20 @@ public class TournamentService {
     private final TournamentPlayerRepository tournamentPlayerRepository;
     private final LeagueTournamentSettingsRepository leagueSettingsRepository;
     private final OneOffTournamentSettingsRepository oneOffSettingsRepository;
+    private final LeagueGameDayRepository leagueGameDayRepository;
 
     public TournamentService(TournamentRepository tournamentRepository,
                              UserRepository userRepository,
                              TournamentPlayerRepository tournamentPlayerRepository,
                              LeagueTournamentSettingsRepository leagueSettingsRepository,
-                             OneOffTournamentSettingsRepository oneOffSettingsRepository) {
+                             OneOffTournamentSettingsRepository oneOffSettingsRepository,
+                             LeagueGameDayRepository leagueGameDayRepository) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
         this.tournamentPlayerRepository = tournamentPlayerRepository;
         this.leagueSettingsRepository = leagueSettingsRepository;
         this.oneOffSettingsRepository = oneOffSettingsRepository;
+        this.leagueGameDayRepository = leagueGameDayRepository;
     }
 
     /**
@@ -549,5 +553,74 @@ public class TournamentService {
             }
         }
         return dto;
+    }
+
+    // ── Player-scoped tournament methods ──────────────────────────────────────
+
+    /**
+     * Resolve the calling user and verify they are a PLAYER role.
+     */
+    private User resolvePlayerCaller(String callerUsername) {
+        User caller = userRepository.findByUsername(callerUsername)
+            .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        if (!Role.PLAYER.name().equals(caller.getRole())) {
+            throw new AccessDeniedException("Only players can access this resource");
+        }
+        return caller;
+    }
+
+    /**
+     * Get all tournaments for a player — only tournaments where the caller is a registered
+     * (non-DISABLED) TournamentPlayer.
+     */
+    @Transactional(readOnly = true)
+    public PlayerTournamentResponse getTournamentsForPlayer(String callerUsername) {
+        User caller = resolvePlayerCaller(callerUsername);
+        List<PlayerTournamentResponse.TournamentDto> dtos = tournamentPlayerRepository
+            .findByUserId(caller.getId())
+            .stream()
+            .filter(tp -> tp.getStatus() != PlayerStatus.DISABLED)
+            .map(tp -> toPlayerTournamentDto(tp.getTournament()))
+            .collect(Collectors.toList());
+        return new PlayerTournamentResponse(true, "Tournaments retrieved successfully", dtos);
+    }
+
+    /**
+     * Get a single tournament for a player — confirms caller is a registered (non-DISABLED) player.
+     * Returns slim DTO with game day summary list (ONGOING first, then date desc).
+     */
+    @Transactional(readOnly = true)
+    public PlayerTournamentResponse getTournamentForPlayer(Long tournamentId, String callerUsername) {
+        User caller = resolvePlayerCaller(callerUsername);
+        Optional<Tournament> tournamentOpt = tournamentRepository.findById(tournamentId);
+        if (tournamentOpt.isEmpty()) {
+            return new PlayerTournamentResponse(false, "Tournament not found");
+        }
+        Tournament tournament = tournamentOpt.get();
+        Optional<TournamentPlayer> tpOpt = tournamentPlayerRepository
+            .findByTournamentIdAndUserId(tournamentId, caller.getId());
+        if (tpOpt.isEmpty() || tpOpt.get().getStatus() == PlayerStatus.DISABLED) {
+            return new PlayerTournamentResponse(false, "You are not registered in this tournament");
+        }
+
+        PlayerTournamentResponse.TournamentDto dto = toPlayerTournamentDto(tournament);
+
+        // Attach game day summaries: ONGOING first, then remaining by date desc
+        List<PlayerTournamentResponse.GameDaySummaryDto> summaries = leagueGameDayRepository
+            .findByTournamentIdOrderByGameDateDesc(tournamentId)
+            .stream()
+            .map(d -> new PlayerTournamentResponse.GameDaySummaryDto(
+                d.getId(), d.getGameDate().toString(), d.getStatus().name()))
+            .sorted(Comparator.comparing(
+                (PlayerTournamentResponse.GameDaySummaryDto s) -> "ONGOING".equals(s.getStatus()) ? 0 : 1))
+            .collect(Collectors.toList());
+        dto.setGameDays(summaries);
+
+        return new PlayerTournamentResponse(true, "Tournament retrieved successfully", dto);
+    }
+
+    private PlayerTournamentResponse.TournamentDto toPlayerTournamentDto(Tournament t) {
+        return new PlayerTournamentResponse.TournamentDto(
+            t.getId(), t.getName(), t.getType(), t.isEnabled());
     }
 }

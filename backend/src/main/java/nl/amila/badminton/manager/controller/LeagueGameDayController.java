@@ -6,6 +6,8 @@ import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.service.LeagueGameDayService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -149,6 +151,68 @@ public class LeagueGameDayController {
             return ResponseEntity.ok(response);
         } else {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+
+    // ── Player-scoped endpoints ───────────────────────────────────────────────
+
+    /**
+     * Get all game days for a tournament (PLAYER role — filtered to player's own registration).
+     */
+    @GetMapping("/player-list")
+    public ResponseEntity<GameDayResponse> getGameDaysForPlayer(
+            @PathVariable Long tournamentId,
+            Authentication authentication) {
+        GameDayResponse response = leagueGameDayService.getGameDaysForPlayer(tournamentId, authentication.getName());
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+    }
+
+    /**
+     * Get a specific game day for the authenticated player — returns only the player's group.
+     */
+    @GetMapping("/{dayId}/player-view")
+    public ResponseEntity<GameDayResponse> getGameDayForPlayer(
+            @PathVariable Long tournamentId,
+            @PathVariable Long dayId,
+            Authentication authentication) {
+        GameDayResponse response = leagueGameDayService.getGameDayForPlayer(tournamentId, dayId, authentication.getName());
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+    }
+
+    /**
+     * Submit match score as a player. Score can only be set once — first submission wins.
+     * Returns HTTP 409 if score was already submitted (concurrent duplicate).
+     */
+    @PutMapping("/{dayId}/groups/{groupId}/matches/{matchId}/player-score")
+    public ResponseEntity<GameDayResponse> submitMatchScoreAsPlayer(
+            @PathVariable Long tournamentId,
+            @PathVariable Long dayId,
+            @PathVariable Long groupId,
+            @PathVariable Long matchId,
+            @RequestBody SubmitMatchScoreRequest request,
+            Authentication authentication) {
+        try {
+            GameDayResponse response = leagueGameDayService.submitMatchScoreAsPlayer(
+                tournamentId, dayId, groupId, matchId, request, authentication.getName());
+            if (response.isSuccess()) {
+                return ResponseEntity.ok(response);
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+        } catch (ObjectOptimisticLockingFailureException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new GameDayResponse(false, "Score was already submitted by another player"));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new GameDayResponse(false, e.getMessage()));
         }
     }
 }
