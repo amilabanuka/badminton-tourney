@@ -139,6 +139,16 @@ export const tournamentAPI = {
       `/api/tournaments/${tournamentId}/game-days/${dayId}/groups/${groupId}/matches/${matchId}/score`,
       data
     )
+  },
+
+  // Finish a game day (ONGOING → COMPLETED): triggers Modified-ELO rank calculation
+  finishGameDay (tournamentId, dayId) {
+    return apiClient.post(`/api/tournaments/${tournamentId}/game-days/${dayId}/finish`)
+  },
+
+  // Get public rankings for a tournament (no auth required)
+  getPublicRankings (tournamentId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/rankings`)
   }
 }
 

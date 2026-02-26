@@ -72,6 +72,12 @@ const routes = [
     name: 'league-day-view',
     component: () => import('../views/admin/LeagueDayView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/tournaments/:id/rankings',
+    name: 'tournament-rankings',
+    component: () => import('../views/TournamentRankingsView.vue')
+    // no meta.requiresAuth — publicly accessible without login
   }
 ]
 

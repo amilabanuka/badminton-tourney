@@ -181,6 +181,19 @@ public class TournamentController {
     }
 
     /**
+     * Get public rankings for a tournament — no authentication required
+     */
+    @GetMapping("/{id}/rankings")
+    public ResponseEntity<TournamentResponse> getPublicRankings(@PathVariable Long id) {
+        TournamentResponse response = tournamentService.getPublicRankings(id);
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+    }
+
+    /**
      * Update tournament settings config values (ADMIN or TOURNY_ADMIN of this tournament)
      */
     @PutMapping("/{id}/settings")

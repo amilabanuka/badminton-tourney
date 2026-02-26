@@ -382,6 +382,21 @@ public class TournamentService {
     }
 
     /**
+     * Get public rankings for a tournament (no authentication required).
+     * Returns tournament name and players sorted by rank score descending.
+     */
+    @Transactional(readOnly = true)
+    public TournamentResponse getPublicRankings(Long tournamentId) {
+        Optional<Tournament> tournamentOpt = tournamentRepository.findById(tournamentId);
+        if (tournamentOpt.isEmpty()) {
+            return new TournamentResponse(false, "Tournament not found");
+        }
+        Tournament tournament = tournamentOpt.get();
+        TournamentResponse.TournamentDto dto = toDto(tournament);
+        return new TournamentResponse(true, "Rankings retrieved successfully", dto);
+    }
+
+    /**
      * Get tournaments - ADMIN sees all, TOURNY_ADMIN sees only tournaments they are an admin of
      */
     public TournamentResponse getTournaments(String username) {

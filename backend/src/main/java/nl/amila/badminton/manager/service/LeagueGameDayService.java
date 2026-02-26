@@ -6,12 +6,16 @@ import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.entity.*;
 import nl.amila.badminton.manager.repository.LeagueGameDayGroupMatchRepository;
 import nl.amila.badminton.manager.repository.LeagueGameDayRepository;
+import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.RankScoreHistoryRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -32,17 +36,23 @@ public class LeagueGameDayService {
     private final LeagueGameDayRepository leagueGameDayRepository;
     private final LeagueGameDayGroupMatchRepository matchRepository;
     private final UserRepository userRepository;
+    private final LeagueTournamentSettingsRepository leagueSettingsRepository;
+    private final RankScoreHistoryRepository rankScoreHistoryRepository;
 
     public LeagueGameDayService(TournamentRepository tournamentRepository,
                                 TournamentPlayerRepository tournamentPlayerRepository,
                                 LeagueGameDayRepository leagueGameDayRepository,
                                 LeagueGameDayGroupMatchRepository matchRepository,
-                                UserRepository userRepository) {
+                                UserRepository userRepository,
+                                LeagueTournamentSettingsRepository leagueSettingsRepository,
+                                RankScoreHistoryRepository rankScoreHistoryRepository) {
         this.tournamentRepository = tournamentRepository;
         this.tournamentPlayerRepository = tournamentPlayerRepository;
         this.leagueGameDayRepository = leagueGameDayRepository;
         this.matchRepository = matchRepository;
         this.userRepository = userRepository;
+        this.leagueSettingsRepository = leagueSettingsRepository;
+        this.rankScoreHistoryRepository = rankScoreHistoryRepository;
     }
 
     /**
@@ -338,6 +348,105 @@ public class LeagueGameDayService {
         // Re-fetch with full joins so the returned DTO reflects the updated score
         LeagueGameDay refreshed = leagueGameDayRepository.findByIdWithAll(dayId).orElse(day);
         return new GameDayResponse(true, "Score submitted successfully", toDto(refreshed));
+    }
+
+    /**
+     * Finish a game day: ONGOING → COMPLETED.
+     * Validates all matches have scores, runs Modified-ELO calculation,
+     * saves rank score history per player per match, and updates player rank scores.
+     */
+    @Transactional
+    public GameDayResponse finishGameDay(Long tournamentId, Long dayId, String callerUsername) {
+        Optional<LeagueGameDay> dayOpt = leagueGameDayRepository.findByIdWithAll(dayId);
+        if (dayOpt.isEmpty() || !dayOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new GameDayResponse(false, "Game day not found");
+        }
+        LeagueGameDay day = dayOpt.get();
+        if (!isAuthorized(day.getTournament(), callerUsername)) {
+            return new GameDayResponse(false, "Access denied");
+        }
+        if (day.getStatus() != GameDayStatus.ONGOING) {
+            return new GameDayResponse(false, "Only ONGOING game days can be finished");
+        }
+
+        // Validate all matches have scores
+        for (LeagueGameDayGroup group : day.getGroups()) {
+            for (LeagueGameDayGroupMatch match : group.getMatches()) {
+                if (match.getTeam1Score() == null || match.getTeam2Score() == null) {
+                    return new GameDayResponse(false,
+                        "All matches must have scores before finishing. Match #"
+                        + match.getMatchOrder() + " in Group " + group.getGroupNumber() + " is missing a score.");
+                }
+            }
+        }
+
+        // Load ELO config
+        Optional<LeagueTournamentSettings> settingsOpt =
+            leagueSettingsRepository.findByTournamentId(tournamentId);
+        if (settingsOpt.isEmpty() || !(settingsOpt.get().getRankingConfig() instanceof ModifiedEloConfig eloConfig)) {
+            return new GameDayResponse(false, "League ELO settings not found for this tournament");
+        }
+        double K = eloConfig.k();
+
+        // For each match: compute ELO delta, save history rows (using current rankScore as baseline),
+        // then accumulate deltas. History records the pre-delta score for each player.
+        Map<Long, BigDecimal> deltas = new HashMap<>();
+
+        for (LeagueGameDayGroup group : day.getGroups()) {
+            for (LeagueGameDayGroupMatch match : group.getMatches()) {
+                TournamentPlayer tp1p1 = match.getTeam1Player1().getTournamentPlayer();
+                TournamentPlayer tp1p2 = match.getTeam1Player2().getTournamentPlayer();
+                TournamentPlayer tp2p1 = match.getTeam2Player1().getTournamentPlayer();
+                TournamentPlayer tp2p2 = match.getTeam2Player2().getTournamentPlayer();
+
+                double scoreK = tp1p1.getRankScore().doubleValue();
+                double scoreL = tp1p2.getRankScore().doubleValue();
+                double scoreM = tp2p1.getRankScore().doubleValue();
+                double scoreN = tp2p2.getRankScore().doubleValue();
+
+                double X = (scoreK + scoreL) / 2.0; // team1 average strength
+                double Y = (scoreM + scoreN) / 2.0; // team2 average strength
+                double T = 1.0 / (1.0 + Math.pow(10.0, (Y - X) / 480.0));
+
+                boolean team1Wins = match.getTeam1Score() > match.getTeam2Score();
+                double team1Delta = team1Wins ? K * T : -K * T;
+                double team2Delta = -team1Delta;
+
+                BigDecimal bd1 = BigDecimal.valueOf(team1Delta).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal bd2 = BigDecimal.valueOf(team2Delta).setScale(2, RoundingMode.HALF_UP);
+
+                // Save history with current (pre-delta) score as previous
+                rankScoreHistoryRepository.save(new RankScoreHistory(tp1p1, match,
+                    tp1p1.getRankScore(), tp1p1.getRankScore().add(bd1)));
+                rankScoreHistoryRepository.save(new RankScoreHistory(tp1p2, match,
+                    tp1p2.getRankScore(), tp1p2.getRankScore().add(bd1)));
+                rankScoreHistoryRepository.save(new RankScoreHistory(tp2p1, match,
+                    tp2p1.getRankScore(), tp2p1.getRankScore().add(bd2)));
+                rankScoreHistoryRepository.save(new RankScoreHistory(tp2p2, match,
+                    tp2p2.getRankScore(), tp2p2.getRankScore().add(bd2)));
+
+                // Accumulate deltas
+                deltas.merge(tp1p1.getId(), bd1, BigDecimal::add);
+                deltas.merge(tp1p2.getId(), bd1, BigDecimal::add);
+                deltas.merge(tp2p1.getId(), bd2, BigDecimal::add);
+                deltas.merge(tp2p2.getId(), bd2, BigDecimal::add);
+            }
+        }
+
+        // Apply accumulated deltas and persist updated rank scores
+        for (Map.Entry<Long, BigDecimal> entry : deltas.entrySet()) {
+            tournamentPlayerRepository.findById(entry.getKey()).ifPresent(tp -> {
+                tp.setRankScore(tp.getRankScore().add(entry.getValue()));
+                tournamentPlayerRepository.save(tp);
+            });
+        }
+
+        day.setStatus(GameDayStatus.COMPLETED);
+        day.setUpdatedAt(System.currentTimeMillis());
+        leagueGameDayRepository.save(day);
+
+        LeagueGameDay refreshed = leagueGameDayRepository.findByIdWithAll(dayId).orElse(day);
+        return new GameDayResponse(true, "Game day finished and rankings updated", toDto(refreshed));
     }
 
     /**

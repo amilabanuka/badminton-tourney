@@ -1,5 +1,4 @@
-import { tournamentAPI } from '@/services/api'
-import apiClient from '@/services/api'
+import apiClient, { tournamentAPI } from '@/services/api'
 
 jest.mock('axios', () => {
   const mockAxios = {

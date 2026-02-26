@@ -79,7 +79,15 @@
 
           <!-- Actions: ONGOING -->
           <div v-if="gameDay.status === 'ONGOING'" class="d-flex gap-2">
-            <button class="btn btn-warning" @click="cancelDay" :disabled="actionInProgress">
+            <button class="btn btn-success" @click="finishDay" :disabled="!!actionInProgress">
+              <span v-if="actionInProgress === 'finish'">
+                <i class="bi bi-hourglass-split me-1"></i>Calculating...
+              </span>
+              <span v-else>
+                <i class="bi bi-flag-fill me-1"></i>Finish Game Day
+              </span>
+            </button>
+            <button class="btn btn-warning" @click="cancelDay" :disabled="!!actionInProgress">
               <span v-if="actionInProgress === 'cancel'">
                 <i class="bi bi-hourglass-split me-1"></i>Cancelling...
               </span>
@@ -222,6 +230,19 @@
       </div>
     </div>
   </div>
+
+  <!-- Calculating overlay shown while ELO scores are being processed -->
+  <div
+    v-if="actionInProgress === 'finish'"
+    class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center"
+    style="z-index:1050; background: rgba(255,255,255,0.92);"
+  >
+    <div class="spinner-border text-success mb-3" style="width:3.5rem;height:3.5rem;" role="status">
+      <span class="visually-hidden">Calculating...</span>
+    </div>
+    <h4 class="text-success mb-1">Calculating Rankings…</h4>
+    <p class="text-muted">Please wait while ELO scores are being updated.</p>
+  </div>
 </template>
 
 <script>
@@ -344,6 +365,45 @@ export default {
         }
       } catch (err) {
         this.error = err.response?.data?.message || 'Error cancelling game day'
+        console.error(err)
+      } finally {
+        this.actionInProgress = null
+      }
+    },
+
+    async finishDay () {
+      if (!confirm('Finish this game day? This will calculate ELO rankings for all players and cannot be undone.')) return
+
+      // Frontend validation: every match must have both scores saved
+      const missing = []
+      for (const group of (this.gameDay.groups || [])) {
+        for (const match of (group.matches || [])) {
+          const input = this.scoreInputs[match.id]
+          const t1 = input !== undefined ? input.team1Score : match.team1Score
+          const t2 = input !== undefined ? input.team2Score : match.team2Score
+          if (t1 === '' || t1 === null || t1 === undefined ||
+              t2 === '' || t2 === null || t2 === undefined) {
+            missing.push(`Group ${group.groupNumber} Match #${match.matchOrder}`)
+          }
+        }
+      }
+      if (missing.length > 0) {
+        this.error = `Save scores for all matches before finishing: ${missing.join(', ')}`
+        return
+      }
+
+      this.actionInProgress = 'finish'
+      this.error = null
+      this.successMessage = null
+      try {
+        const res = await tournamentAPI.finishGameDay(this.tournamentId, this.dayId)
+        if (res.data.success) {
+          this.$router.push(`/tournaments/${this.tournamentId}/rankings`)
+        } else {
+          this.error = res.data.message || 'Failed to finish game day'
+        }
+      } catch (err) {
+        this.error = err.response?.data?.message || 'Error finishing game day'
         console.error(err)
       } finally {
         this.actionInProgress = null

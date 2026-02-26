@@ -134,5 +134,22 @@ public class LeagueGameDayController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
+
+    /**
+     * Finish a game day (ONGOING → COMPLETED): validates all scores, runs Modified-ELO calculation,
+     * saves rank score history, and updates player rank scores.
+     */
+    @PostMapping("/{dayId}/finish")
+    public ResponseEntity<GameDayResponse> finishGameDay(
+            @PathVariable Long tournamentId,
+            @PathVariable Long dayId,
+            Authentication authentication) {
+        GameDayResponse response = leagueGameDayService.finishGameDay(tournamentId, dayId, authentication.getName());
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
 }
 
