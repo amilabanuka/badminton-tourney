@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import jakarta.persistence.*;
+import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
+import nl.amila.badminton.manager.entity.oneoff.OneOffTournamentSettings;
 
 import java.util.ArrayList;
 import java.util.List;

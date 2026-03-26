@@ -1,9 +1,20 @@
-package nl.amila.badminton.manager.service;
+package nl.amila.badminton.manager.service.league;
 
-import nl.amila.badminton.manager.dto.GameDayResponse;
-import nl.amila.badminton.manager.dto.PlayerHistoryResponse;
+import nl.amila.badminton.manager.dto.league.GameDayResponse;
+import nl.amila.badminton.manager.dto.league.PlayerHistoryResponse;
 import nl.amila.badminton.manager.entity.*;
+import nl.amila.badminton.manager.entity.league.GameDayStatus;
+import nl.amila.badminton.manager.entity.league.LeagueGameDay;
+import nl.amila.badminton.manager.entity.league.LeagueGameDayGroup;
+import nl.amila.badminton.manager.entity.league.LeagueGameDayGroupMatch;
+import nl.amila.badminton.manager.entity.league.LeagueGameDayGroupPlayer;
+import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
+import nl.amila.badminton.manager.entity.league.RankScoreHistory;
 import nl.amila.badminton.manager.repository.*;
+import nl.amila.badminton.manager.repository.league.LeagueGameDayGroupMatchRepository;
+import nl.amila.badminton.manager.repository.league.LeagueGameDayRepository;
+import nl.amila.badminton.manager.repository.league.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.league.RankScoreHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

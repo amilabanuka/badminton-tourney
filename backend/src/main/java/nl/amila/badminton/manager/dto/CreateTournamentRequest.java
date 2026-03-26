@@ -3,6 +3,8 @@ package nl.amila.badminton.manager.dto;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import nl.amila.badminton.manager.dto.league.LeagueSettingsRequest;
+import nl.amila.badminton.manager.dto.oneoff.OneOffSettingsRequest;
 import nl.amila.badminton.manager.entity.TournamentType;
 
 @Getter

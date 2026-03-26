@@ -1,6 +1,10 @@
-package nl.amila.badminton.manager.entity;
+package nl.amila.badminton.manager.entity.league;
 
 import jakarta.persistence.*;
+import nl.amila.badminton.manager.entity.Tournament;
+import nl.amila.badminton.manager.entity.RankingLogic;
+import nl.amila.badminton.manager.entity.RankingConfig;
+import nl.amila.badminton.manager.entity.RankingConfigConverter;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

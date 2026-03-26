@@ -1,10 +1,10 @@
-package nl.amila.badminton.manager.controller;
+package nl.amila.badminton.manager.controller.league;
 
-import nl.amila.badminton.manager.dto.CreateGameDayRequest;
-import nl.amila.badminton.manager.dto.GameDayResponse;
-import nl.amila.badminton.manager.dto.PlayerHistoryResponse;
-import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
-import nl.amila.badminton.manager.service.LeagueGameDayService;
+import nl.amila.badminton.manager.dto.league.CreateGameDayRequest;
+import nl.amila.badminton.manager.dto.league.GameDayResponse;
+import nl.amila.badminton.manager.dto.league.PlayerHistoryResponse;
+import nl.amila.badminton.manager.dto.league.SubmitMatchScoreRequest;
+import nl.amila.badminton.manager.service.league.LeagueGameDayService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;

@@ -1,4 +1,4 @@
-package nl.amila.badminton.manager.dto;
+package nl.amila.badminton.manager.dto.league;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

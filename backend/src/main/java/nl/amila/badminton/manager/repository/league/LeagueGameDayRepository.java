@@ -1,6 +1,6 @@
-package nl.amila.badminton.manager.repository;
+package nl.amila.badminton.manager.repository.league;
 
-import nl.amila.badminton.manager.entity.LeagueGameDay;
+import nl.amila.badminton.manager.entity.league.LeagueGameDay;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

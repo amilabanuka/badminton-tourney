@@ -1,4 +1,4 @@
-package nl.amila.badminton.manager.entity;
+package nl.amila.badminton.manager.entity.league;
 
 import jakarta.persistence.*;
 import lombok.Getter;

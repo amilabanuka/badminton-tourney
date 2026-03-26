@@ -1,6 +1,7 @@
-package nl.amila.badminton.manager.entity;
+package nl.amila.badminton.manager.entity.oneoff;
 
 import jakarta.persistence.*;
+import nl.amila.badminton.manager.entity.Tournament;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

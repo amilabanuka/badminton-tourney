@@ -64,19 +64,19 @@ const routes = [
   {
     path: '/admin/tournaments/:id/game-days/new',
     name: 'create-league-day',
-    component: () => import('../views/admin/CreateLeagueDayView.vue'),
+    component: () => import('../views/admin/league/CreateLeagueDayView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/admin/tournaments/:id/game-days/:dayId',
     name: 'league-day-view',
-    component: () => import('../views/admin/LeagueDayView.vue'),
+    component: () => import('../views/admin/league/LeagueDayView.vue'),
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   {
     path: '/tournaments/:id/rankings',
     name: 'tournament-rankings',
-    component: () => import('../views/TournamentRankingsView.vue')
+    component: () => import('../views/league/TournamentRankingsView.vue')
     // no meta.requiresAuth — publicly accessible without login
   },
   {
@@ -88,13 +88,13 @@ const routes = [
   {
     path: '/tournaments/:id/game-days/:dayId',
     name: 'player-league-day-view',
-    component: () => import('../views/PlayerLeagueDayView.vue'),
+    component: () => import('../views/league/PlayerLeagueDayView.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/tournaments/:id/players/:tournamentPlayerId/history',
     name: 'player-history-view',
-    component: () => import('../views/PlayerHistoryView.vue'),
+    component: () => import('../views/league/PlayerHistoryView.vue'),
     meta: { requiresAuth: true }
   }
 ]

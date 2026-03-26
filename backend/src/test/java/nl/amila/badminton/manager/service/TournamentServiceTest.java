@@ -1,9 +1,11 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
-import nl.amila.badminton.manager.entity.LeagueTournamentSettings;
+import nl.amila.badminton.manager.dto.league.LeagueSettingsRequest;
+import nl.amila.badminton.manager.dto.oneoff.OneOffSettingsRequest;
+import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
 import nl.amila.badminton.manager.entity.ModifiedEloConfig;
-import nl.amila.badminton.manager.entity.OneOffTournamentSettings;
+import nl.amila.badminton.manager.entity.oneoff.OneOffTournamentSettings;
 import nl.amila.badminton.manager.entity.RankingLogic;
 import nl.amila.badminton.manager.entity.Role;
 import nl.amila.badminton.manager.entity.Tournament;
@@ -11,9 +13,9 @@ import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
-import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
-import nl.amila.badminton.manager.repository.LeagueGameDayRepository;
-import nl.amila.badminton.manager.repository.OneOffTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.league.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.league.LeagueGameDayRepository;
+import nl.amila.badminton.manager.repository.oneoff.OneOffTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
 import nl.amila.badminton.manager.repository.UserRepository;
