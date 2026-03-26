@@ -39,7 +39,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(player, index) in rankedPlayers" :key="player.tournamentPlayerId">
+              <tr
+                v-for="(player, index) in rankedPlayers"
+                :key="player.tournamentPlayerId"
+                style="cursor: pointer;"
+                title="Click to view match history"
+                @click="viewPlayerHistory(player)"
+              >
                 <td class="text-center ps-3">
                   <span v-if="index === 0" class="fs-5" title="1st place">🥇</span>
                   <span v-else-if="index === 1" class="fs-5" title="2nd place">🥈</span>
@@ -48,6 +54,7 @@
                 </td>
                 <td>
                   <span class="fw-semibold">{{ player.firstName }} {{ player.lastName }}</span>
+                  <i class="bi bi-chevron-right text-muted ms-2 small"></i>
                 </td>
                 <td class="text-end pe-4">
                   <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2 font-monospace fs-6">
@@ -73,6 +80,7 @@
 </template>
 
 <script>
+import { mapGetters } from 'vuex'
 import { tournamentAPI } from '@/services/api'
 
 export default {
@@ -87,6 +95,8 @@ export default {
   },
 
   computed: {
+    ...mapGetters('auth', ['isAuthenticated']),
+
     rankedPlayers () {
       if (!this.tournament || !this.tournament.players) return []
       return [...this.tournament.players]
@@ -114,6 +124,18 @@ export default {
     } finally {
       this.loading = false
     }
+  },
+
+  methods: {
+    viewPlayerHistory (player) {
+      if (!this.isAuthenticated) {
+        this.$router.push('/login')
+        return
+      }
+      this.$router.push(
+        `/tournaments/${this.$route.params.id}/players/${player.tournamentPlayerId}/history?from=rankings`
+      )
+    }
   }
 }
 </script>
@@ -121,5 +143,8 @@ export default {
 <style scoped>
 .font-monospace {
   font-family: 'Courier New', monospace;
+}
+tbody tr:hover {
+  background-color: #f0f4ff;
 }
 </style>

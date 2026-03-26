@@ -1,6 +1,7 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.GameDayResponse;
+import nl.amila.badminton.manager.dto.PlayerHistoryResponse;
 import nl.amila.badminton.manager.entity.*;
 import nl.amila.badminton.manager.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -280,6 +281,88 @@ class LeagueGameDayServiceTest {
         } catch (Exception e) {
             throw new RuntimeException("Could not set id on " + entity.getClass().getSimpleName(), e);
         }
+    }
+
+    // ── getPlayerHistory ──────────────────────────────────────────────────────
+
+    @Test
+    void getPlayerHistory_success_returnsGroupedByGameDay() {
+        gameDay.setStatus(GameDayStatus.COMPLETED);
+
+        RankScoreHistory h1 = new RankScoreHistory(tp1, match,
+            new BigDecimal("100.00"), new BigDecimal("115.00"));
+        when(tournamentPlayerRepository.findById(1L)).thenReturn(Optional.of(tp1));
+        when(rankScoreHistoryRepository.findByTournamentPlayerIdOrderByChangedAtDesc(1L))
+            .thenReturn(List.of(h1));
+
+        PlayerHistoryResponse res = service.getPlayerHistory(1L, 1L);
+
+        assertTrue(res.isSuccess());
+        assertEquals("Alice A", res.getPlayerName());
+        assertEquals(1, res.getGameDays().size());
+        PlayerHistoryResponse.GameDayHistoryDto day = res.getGameDays().get(0);
+        assertEquals("2025-01-10", day.getGameDate());
+        assertEquals(1, day.getMatches().size());
+        PlayerHistoryResponse.MatchHistoryDto m = day.getMatches().get(0);
+        assertEquals(new BigDecimal("100.00"), m.getPreviousScore());
+        assertEquals(new BigDecimal("115.00"), m.getNewScore());
+        assertEquals(new BigDecimal("15.00"), m.getScoreDelta());
+        assertTrue(m.isPlayerOnTeam1());
+    }
+
+    @Test
+    void getPlayerHistory_playerOnTeam2_flagsCorrectly() {
+        gameDay.setStatus(GameDayStatus.COMPLETED);
+
+        // tp3 is on team2 in the match fixture
+        RankScoreHistory h = new RankScoreHistory(tp3, match,
+            new BigDecimal("60.00"), new BigDecimal("45.00"));
+        when(tournamentPlayerRepository.findById(3L)).thenReturn(Optional.of(tp3));
+        when(rankScoreHistoryRepository.findByTournamentPlayerIdOrderByChangedAtDesc(3L))
+            .thenReturn(List.of(h));
+
+        PlayerHistoryResponse res = service.getPlayerHistory(1L, 3L);
+
+        assertTrue(res.isSuccess());
+        assertFalse(res.getGameDays().get(0).getMatches().get(0).isPlayerOnTeam1());
+    }
+
+    @Test
+    void getPlayerHistory_emptyHistory_returnsEmptyList() {
+        when(tournamentPlayerRepository.findById(1L)).thenReturn(Optional.of(tp1));
+        when(rankScoreHistoryRepository.findByTournamentPlayerIdOrderByChangedAtDesc(1L))
+            .thenReturn(Collections.emptyList());
+
+        PlayerHistoryResponse res = service.getPlayerHistory(1L, 1L);
+
+        assertTrue(res.isSuccess());
+        assertTrue(res.getGameDays().isEmpty());
+    }
+
+    @Test
+    void getPlayerHistory_playerNotFound_returnsError() {
+        when(tournamentPlayerRepository.findById(99L)).thenReturn(Optional.empty());
+
+        PlayerHistoryResponse res = service.getPlayerHistory(1L, 99L);
+
+        assertFalse(res.isSuccess());
+        assertEquals("Player not found in this tournament", res.getMessage());
+    }
+
+    @Test
+    void getPlayerHistory_playerBelongsToDifferentTournament_returnsError() {
+        Tournament otherTournament = new Tournament("Other", 1L, true, TournamentType.LEAGUE);
+        setId(otherTournament, 99L);
+        TournamentPlayer otherTp = new TournamentPlayer(otherTournament, tp1.getUser());
+        setId(otherTp, 5L);
+
+        when(tournamentPlayerRepository.findById(5L)).thenReturn(Optional.of(otherTp));
+
+        // Request history for tournament 1 but player belongs to tournament 99
+        PlayerHistoryResponse res = service.getPlayerHistory(1L, 5L);
+
+        assertFalse(res.isSuccess());
+        assertEquals("Player not found in this tournament", res.getMessage());
     }
 }
 

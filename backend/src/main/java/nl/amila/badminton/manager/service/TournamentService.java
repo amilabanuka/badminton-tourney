@@ -604,6 +604,7 @@ public class TournamentService {
         }
 
         PlayerTournamentResponse.TournamentDto dto = toPlayerTournamentDto(tournament);
+        dto.setTournamentPlayerId(tpOpt.get().getId());
 
         // Attach game day summaries: ONGOING first, then remaining by date desc
         List<PlayerTournamentResponse.GameDaySummaryDto> summaries = leagueGameDayRepository

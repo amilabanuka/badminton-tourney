@@ -179,6 +179,11 @@ export const tournamentAPI = {
       `/api/tournaments/${tournamentId}/game-days/${dayId}/groups/${groupId}/matches/${matchId}/player-score`,
       data
     )
+  },
+
+  // Get completed game day history for a player (any authenticated user can view any player)
+  getPlayerHistory (tournamentId, tournamentPlayerId) {
+    return apiClient.get(`/api/tournaments/${tournamentId}/game-days/players/${tournamentPlayerId}/history`)
   }
 }
 

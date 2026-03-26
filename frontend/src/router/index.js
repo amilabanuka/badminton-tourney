@@ -90,6 +90,12 @@ const routes = [
     name: 'player-league-day-view',
     component: () => import('../views/PlayerLeagueDayView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/tournaments/:id/players/:tournamentPlayerId/history',
+    name: 'player-history-view',
+    component: () => import('../views/PlayerHistoryView.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

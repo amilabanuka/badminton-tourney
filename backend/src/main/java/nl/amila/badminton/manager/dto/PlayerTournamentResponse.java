@@ -44,6 +44,8 @@ public class PlayerTournamentResponse {
         private String name;
         private TournamentType type;
         private boolean enabled;
+        /** The caller's own TournamentPlayer id — only set by the single-tournament player-view endpoint. */
+        private Long tournamentPlayerId;
         private List<GameDaySummaryDto> gameDays;
 
         public TournamentDto(Long id, String name, TournamentType type, boolean enabled) {

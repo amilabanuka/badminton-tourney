@@ -2,6 +2,7 @@ package nl.amila.badminton.manager.controller;
 
 import nl.amila.badminton.manager.dto.CreateGameDayRequest;
 import nl.amila.badminton.manager.dto.GameDayResponse;
+import nl.amila.badminton.manager.dto.PlayerHistoryResponse;
 import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.service.LeagueGameDayService;
 import org.springframework.http.HttpStatus;
@@ -213,6 +214,23 @@ public class LeagueGameDayController {
         } catch (AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new GameDayResponse(false, e.getMessage()));
+        }
+    }
+
+    /**
+     * Get completed game day history for a specific tournament player.
+     * Any authenticated user may view any player's history.
+     * URL: GET /api/tournaments/{tournamentId}/game-days/players/{tournamentPlayerId}/history
+     */
+    @GetMapping("/players/{tournamentPlayerId}/history")
+    public ResponseEntity<PlayerHistoryResponse> getPlayerHistory(
+            @PathVariable Long tournamentId,
+            @PathVariable Long tournamentPlayerId) {
+        PlayerHistoryResponse response = leagueGameDayService.getPlayerHistory(tournamentId, tournamentPlayerId);
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         }
     }
 }

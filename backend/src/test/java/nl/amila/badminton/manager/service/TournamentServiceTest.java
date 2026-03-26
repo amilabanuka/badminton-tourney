@@ -12,6 +12,7 @@ import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
 import nl.amila.badminton.manager.repository.LeagueTournamentSettingsRepository;
+import nl.amila.badminton.manager.repository.LeagueGameDayRepository;
 import nl.amila.badminton.manager.repository.OneOffTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.TournamentPlayerRepository;
 import nl.amila.badminton.manager.repository.TournamentRepository;
@@ -47,6 +48,9 @@ class TournamentServiceTest {
 
     @Mock
     private LeagueTournamentSettingsRepository leagueSettingsRepository;
+
+    @Mock
+    private LeagueGameDayRepository leagueGameDayRepository;
 
     @Mock
     private OneOffTournamentSettingsRepository oneOffSettingsRepository;
@@ -838,5 +842,59 @@ class TournamentServiceTest {
         TournamentResponse.PlayerDto dto = response.getTournament().getPlayers().get(0);
         assertNull(dto.getRank());
         assertEquals(BigDecimal.ZERO, dto.getRankScore());
+    }
+
+    // -------------------------------------------------------------------------
+    // getTournamentForPlayer
+    // -------------------------------------------------------------------------
+
+    @Test
+    void testGetTournamentForPlayer_setsTournamentPlayerId() {
+        TournamentPlayer tp = new TournamentPlayer(tournament, playerUser, new BigDecimal("50.00"));
+        tp.setId(42L);
+
+        when(userRepository.findByUsername("player")).thenReturn(Optional.of(playerUser));
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(tournamentPlayerRepository.findByTournamentIdAndUserId(1L, 3L))
+            .thenReturn(Optional.of(tp));
+        when(leagueGameDayRepository.findByTournamentIdOrderByGameDateDesc(1L))
+            .thenReturn(List.of());
+
+        PlayerTournamentResponse response = tournamentService.getTournamentForPlayer(1L, "player");
+
+        assertTrue(response.isSuccess());
+        assertEquals(42L, response.getTournament().getTournamentPlayerId());
+    }
+
+    @Test
+    void testGetTournamentForPlayer_tournamentNotFound_returnsError() {
+        when(userRepository.findByUsername("player")).thenReturn(Optional.of(playerUser));
+        when(tournamentRepository.findById(99L)).thenReturn(Optional.empty());
+
+        PlayerTournamentResponse response = tournamentService.getTournamentForPlayer(99L, "player");
+
+        assertFalse(response.isSuccess());
+        assertEquals("Tournament not found", response.getMessage());
+    }
+
+    @Test
+    void testGetTournamentForPlayer_playerNotRegistered_returnsError() {
+        when(userRepository.findByUsername("player")).thenReturn(Optional.of(playerUser));
+        when(tournamentRepository.findById(1L)).thenReturn(Optional.of(tournament));
+        when(tournamentPlayerRepository.findByTournamentIdAndUserId(1L, 3L))
+            .thenReturn(Optional.empty());
+
+        PlayerTournamentResponse response = tournamentService.getTournamentForPlayer(1L, "player");
+
+        assertFalse(response.isSuccess());
+        assertTrue(response.getMessage().contains("not registered"));
+    }
+
+    @Test
+    void testGetTournamentForPlayer_nonPlayerRole_throwsAccessDenied() {
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
+
+        assertThrows(AccessDeniedException.class,
+            () -> tournamentService.getTournamentForPlayer(1L, "admin"));
     }
 }

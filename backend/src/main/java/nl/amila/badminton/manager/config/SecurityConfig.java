@@ -88,6 +88,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/*/game-days/*/player-view").hasRole("PLAYER")
                 .requestMatchers(HttpMethod.PUT, "/api/tournaments/*/game-days/*/groups/*/matches/*/player-score").hasRole("PLAYER")
 
+                // Player history — any authenticated user can view any player's history
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/*/game-days/players/*/history").authenticated()
+
                 // Admin/TournyAdmin game-day and tournament GET endpoints
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/**").hasAnyRole("ADMIN", "TOURNY_ADMIN")
 

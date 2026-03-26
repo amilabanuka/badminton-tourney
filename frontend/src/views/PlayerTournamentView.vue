@@ -86,32 +86,44 @@
               </div>
             </template>
 
-            <!-- Other days — greyed out with Coming Soon -->
+            <!-- Other days -->
             <div v-if="otherDays.length > 0">
               <h6 class="text-muted mb-2 mt-3">Previous Game Days</h6>
               <div class="list-group">
-                <div
-                  v-for="day in otherDays"
-                  :key="day.id"
-                  class="list-group-item list-group-item-action disabled d-flex justify-content-between align-items-center"
-                  title="Coming soon — previous game day view is not yet available"
-                  style="cursor: not-allowed; opacity: 0.55;"
-                >
-                  <div class="d-flex align-items-center gap-3">
-                    <i class="bi bi-calendar-event text-muted fs-5"></i>
-                    <span>{{ day.gameDate }}</span>
+                <template v-for="day in otherDays" :key="day.id">
+                  <!-- COMPLETED: clickable → history view -->
+                  <div
+                    v-if="day.status === 'COMPLETED'"
+                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                    style="cursor: pointer;"
+                    @click="viewHistory()"
+                  >
+                    <div class="d-flex align-items-center gap-3">
+                      <i class="bi bi-calendar-check text-secondary fs-5"></i>
+                      <span>{{ day.gameDate }}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="badge bg-secondary">COMPLETED</span>
+                      <i class="bi bi-chevron-right text-muted"></i>
+                    </div>
                   </div>
-                  <div class="d-flex align-items-center gap-2">
-                    <span
-                      class="badge"
-                      :class="{
-                        'bg-secondary': day.status === 'COMPLETED',
-                        'bg-warning text-dark': day.status === 'PENDING'
-                      }"
-                    >{{ day.status }}</span>
-                    <span class="badge bg-light text-muted border">Coming soon</span>
+
+                  <!-- PENDING: disabled, not started yet -->
+                  <div
+                    v-else
+                    class="list-group-item disabled d-flex justify-content-between align-items-center"
+                    style="cursor: not-allowed; opacity: 0.55;"
+                  >
+                    <div class="d-flex align-items-center gap-3">
+                      <i class="bi bi-calendar-event text-muted fs-5"></i>
+                      <span>{{ day.gameDate }}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="badge bg-warning text-dark">PENDING</span>
+                      <span class="badge bg-light text-muted border">Not started</span>
+                    </div>
                   </div>
-                </div>
+                </template>
               </div>
             </div>
           </div>
@@ -177,6 +189,13 @@ export default {
 
     enterGameDay (dayId) {
       this.$router.push(`/tournaments/${this.$route.params.id}/game-days/${dayId}`)
+    },
+
+    viewHistory () {
+      const tpId = this.tournament?.tournamentPlayerId
+      if (tpId) {
+        this.$router.push(`/tournaments/${this.$route.params.id}/players/${tpId}/history`)
+      }
     }
   }
 }

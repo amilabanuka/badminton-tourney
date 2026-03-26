@@ -2,6 +2,7 @@ package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.CreateGameDayRequest;
 import nl.amila.badminton.manager.dto.GameDayResponse;
+import nl.amila.badminton.manager.dto.PlayerHistoryResponse;
 import nl.amila.badminton.manager.dto.SubmitMatchScoreRequest;
 import nl.amila.badminton.manager.entity.*;
 import nl.amila.badminton.manager.repository.LeagueGameDayGroupMatchRepository;
@@ -716,6 +717,73 @@ public class LeagueGameDayService {
         dto.setGroups(filtered);
 
         return new GameDayResponse(true, "Score submitted successfully", dto);
+    }
+
+    /**
+     * Get the completed-game-day history for a specific tournament player.
+     * Any authenticated user may view any player's history.
+     */
+    @Transactional(readOnly = true)
+    public PlayerHistoryResponse getPlayerHistory(Long tournamentId, Long tournamentPlayerId) {
+        Optional<TournamentPlayer> tpOpt = tournamentPlayerRepository.findById(tournamentPlayerId);
+        if (tpOpt.isEmpty() || !tpOpt.get().getTournament().getId().equals(tournamentId)) {
+            return new PlayerHistoryResponse(false, "Player not found in this tournament");
+        }
+        TournamentPlayer tp = tpOpt.get();
+        String playerName = tp.getUser().getFirstName() + " " + tp.getUser().getLastName();
+
+        // All history rows for this player, oldest first so match order within a day is chronological
+        List<RankScoreHistory> historyRows = rankScoreHistoryRepository
+            .findByTournamentPlayerIdOrderByChangedAtDesc(tournamentPlayerId);
+
+        // Group by game day id, preserving insertion order (reversed so newest day is first)
+        Map<Long, List<RankScoreHistory>> byDay = new LinkedHashMap<>();
+        for (RankScoreHistory h : historyRows) {
+            Long dayId = h.getMatch().getGroup().getGameDay().getId();
+            byDay.computeIfAbsent(dayId, k -> new ArrayList<>()).add(h);
+        }
+
+        List<PlayerHistoryResponse.GameDayHistoryDto> gameDayDtos = new ArrayList<>();
+        for (Map.Entry<Long, List<RankScoreHistory>> entry : byDay.entrySet()) {
+            List<RankScoreHistory> rows = entry.getValue();
+            // rows are already newest-first from the repo; reverse to chronological within the day
+            List<RankScoreHistory> chronological = new ArrayList<>(rows);
+            Collections.reverse(chronological);
+
+            String gameDate = chronological.get(0).getMatch().getGroup().getGameDay()
+                .getGameDate().toString();
+
+            List<PlayerHistoryResponse.MatchHistoryDto> matchDtos = chronological.stream()
+                .map(h -> {
+                    LeagueGameDayGroupMatch m = h.getMatch();
+                    Long tpId = tp.getId();
+                    boolean onTeam1 = tpId.equals(m.getTeam1Player1().getTournamentPlayer().getId())
+                        || tpId.equals(m.getTeam1Player2().getTournamentPlayer().getId());
+                    return new PlayerHistoryResponse.MatchHistoryDto(
+                        m.getId(),
+                        m.getMatchOrder(),
+                        m.getTeam1Player1().getTournamentPlayer().getUser().getFirstName() + " "
+                            + m.getTeam1Player1().getTournamentPlayer().getUser().getLastName(),
+                        m.getTeam1Player2().getTournamentPlayer().getUser().getFirstName() + " "
+                            + m.getTeam1Player2().getTournamentPlayer().getUser().getLastName(),
+                        m.getTeam2Player1().getTournamentPlayer().getUser().getFirstName() + " "
+                            + m.getTeam2Player1().getTournamentPlayer().getUser().getLastName(),
+                        m.getTeam2Player2().getTournamentPlayer().getUser().getFirstName() + " "
+                            + m.getTeam2Player2().getTournamentPlayer().getUser().getLastName(),
+                        m.getTeam1Score(),
+                        m.getTeam2Score(),
+                        onTeam1,
+                        h.getPreviousScore(),
+                        h.getNewScore()
+                    );
+                })
+                .collect(Collectors.toList());
+
+            gameDayDtos.add(new PlayerHistoryResponse.GameDayHistoryDto(entry.getKey(), gameDate, matchDtos));
+        }
+
+        return new PlayerHistoryResponse(true, "History retrieved successfully",
+            tournamentPlayerId, playerName, gameDayDtos);
     }
 }
 
