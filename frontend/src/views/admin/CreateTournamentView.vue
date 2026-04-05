@@ -73,6 +73,7 @@
                   <option value="">-- Select a Tournament Type --</option>
                   <option value="LEAGUE">League</option>
                   <option value="ONE_OFF">One-off</option>
+                  <option value="APL">APL</option>
                 </select>
                 <div v-if="errors.type" class="invalid-feedback d-block">
                   {{ errors.type }}
@@ -100,19 +101,51 @@
                   <div class="form-text">Controls how much a single match affects rankings. Typical value: 32.</div>
                   <div v-if="errors.k" class="invalid-feedback d-block">{{ errors.k }}</div>
                 </div>
-                <div class="mb-0">
-                  <label for="absenteeDemerit" class="form-label">Absentee Demerit <span class="text-danger">*</span></label>
+              </div>
+
+              <!-- APL Settings -->
+              <div v-if="showAplSettings" class="mb-3 p-3 border rounded bg-light">
+                <h6 class="mb-3">APL Settings</h6>
+                <div class="mb-3">
+                  <label class="form-label">Ranking Logic</label>
+                  <p class="form-control-plaintext fw-bold mb-0">Modified ELO</p>
+                </div>
+                <div class="mb-3">
+                  <label for="aplK" class="form-label">K Factor <span class="text-danger">*</span></label>
                   <input
-                    id="absenteeDemerit"
-                    v-model.number="form.absenteeDemerit"
+                    id="aplK"
+                    v-model.number="form.k"
                     type="number"
-                    min="0"
+                    min="1"
                     class="form-control"
-                    :class="{ 'is-invalid': errors.absenteeDemerit }"
-                    placeholder="e.g. 10"
+                    :class="{ 'is-invalid': errors.k }"
+                    placeholder="e.g. 32"
                   >
-                  <div class="form-text">Points deducted when a player is absent. Use 0 for no penalty.</div>
-                  <div v-if="errors.absenteeDemerit" class="invalid-feedback d-block">{{ errors.absenteeDemerit }}</div>
+                  <div class="form-text">Controls how much a single match affects rankings. Typical value: 32.</div>
+                  <div v-if="errors.k" class="invalid-feedback d-block">{{ errors.k }}</div>
+                </div>
+                <div class="mb-3">
+                  <label for="absenteeDemeritPoints" class="form-label">Absentee Demerit Points</label>
+                  <input
+                    id="absenteeDemeritPoints"
+                    v-model="form.absenteeDemeritPoints"
+                    type="text"
+                    class="form-control"
+                    placeholder="e.g. 10,8,5,3"
+                  >
+                  <div class="form-text">Comma-separated demerit point values per absence (e.g. "10,8,5,3").</div>
+                </div>
+                <div class="mb-0">
+                  <label for="deactivationCount" class="form-label">Deactivation Count</label>
+                  <select
+                    id="deactivationCount"
+                    v-model.number="form.deactivationCount"
+                    class="form-select"
+                  >
+                    <option value="">-- Select (optional) --</option>
+                    <option v-for="n in 20" :key="n" :value="n">{{ n }}</option>
+                  </select>
+                  <div class="form-text">Number of absences before a player is automatically deactivated.</div>
                 </div>
               </div>
 
@@ -198,9 +231,10 @@ export default {
         enabled: true,
         type: '',
         k: '',
-        absenteeDemerit: '',
         numberOfRounds: '',
-        maxPoints: ''
+        maxPoints: '',
+        absenteeDemeritPoints: '',
+        deactivationCount: ''
       },
       availableAdmins: [],
       errors: {},
@@ -216,16 +250,19 @@ export default {
     },
     showOneOffSettings () {
       return this.form.type === 'ONE_OFF'
+    },
+    showAplSettings () {
+      return this.form.type === 'APL'
     }
   },
   watch: {
     'form.type' () {
       this.form.k = ''
-      this.form.absenteeDemerit = ''
       this.form.numberOfRounds = ''
       this.form.maxPoints = ''
+      this.form.absenteeDemeritPoints = ''
+      this.form.deactivationCount = ''
       this.errors.k = null
-      this.errors.absenteeDemerit = null
       this.errors.numberOfRounds = null
       this.errors.maxPoints = null
     }
@@ -281,10 +318,6 @@ export default {
           this.errors.k = 'K factor must be a positive integer'
           isValid = false
         }
-        if (this.form.absenteeDemerit === '' || this.form.absenteeDemerit === null || this.form.absenteeDemerit < 0) {
-          this.errors.absenteeDemerit = 'Absentee demerit must be 0 or greater'
-          isValid = false
-        }
       } else if (this.form.type === 'ONE_OFF') {
         if (this.form.numberOfRounds === '' || this.form.numberOfRounds === null || this.form.numberOfRounds <= 0) {
           this.errors.numberOfRounds = 'Number of rounds must be a positive integer'
@@ -292,6 +325,11 @@ export default {
         }
         if (this.form.maxPoints !== 15 && this.form.maxPoints !== 21) {
           this.errors.maxPoints = 'Max points must be 15 or 21'
+          isValid = false
+        }
+      } else if (this.form.type === 'APL') {
+        if (this.form.k === '' || this.form.k === null || this.form.k <= 0) {
+          this.errors.k = 'K factor must be a positive integer'
           isValid = false
         }
       }
@@ -344,13 +382,19 @@ export default {
         if (this.form.type === 'LEAGUE') {
           payload.leagueSettings = {
             rankingLogic: 'MODIFIED_ELO',
-            k: parseInt(this.form.k),
-            absenteeDemerit: parseInt(this.form.absenteeDemerit)
+            k: parseInt(this.form.k)
           }
         } else if (this.form.type === 'ONE_OFF') {
           payload.oneOffSettings = {
             numberOfRounds: parseInt(this.form.numberOfRounds),
             maxPoints: parseInt(this.form.maxPoints)
+          }
+        } else if (this.form.type === 'APL') {
+          payload.aplSettings = {
+            rankingLogic: 'MODIFIED_ELO',
+            k: parseInt(this.form.k),
+            absenteeDemeritPoints: this.form.absenteeDemeritPoints || null,
+            deactivationCount: this.form.deactivationCount ? parseInt(this.form.deactivationCount) : null
           }
         }
         const response = await tournamentAPI.createTournament(payload)

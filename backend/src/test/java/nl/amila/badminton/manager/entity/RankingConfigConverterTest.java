@@ -17,14 +17,13 @@ class RankingConfigConverterTest {
 
     @Test
     void convertToDatabaseColumn_modifiedEloConfig_producesJsonWithTypeDiscriminator() {
-        ModifiedEloConfig config = new ModifiedEloConfig(32, 5);
+        ModifiedEloConfig config = new ModifiedEloConfig(32);
 
         String json = converter.convertToDatabaseColumn(config);
 
         assertNotNull(json);
         assertTrue(json.contains("\"type\":\"MODIFIED_ELO\""), "JSON must include type discriminator");
         assertTrue(json.contains("\"k\":32"));
-        assertTrue(json.contains("\"absenteeDemerit\":5"));
     }
 
     // --- convertToEntityAttribute ---
@@ -41,14 +40,13 @@ class RankingConfigConverterTest {
 
     @Test
     void convertToEntityAttribute_modifiedEloJson_returnsModifiedEloConfig() {
-        String json = "{\"type\":\"MODIFIED_ELO\",\"k\":32,\"absenteeDemerit\":5}";
+        String json = "{\"type\":\"MODIFIED_ELO\",\"k\":32}";
 
         RankingConfig result = converter.convertToEntityAttribute(json);
 
         assertInstanceOf(ModifiedEloConfig.class, result);
         ModifiedEloConfig eloConfig = (ModifiedEloConfig) result;
         assertEquals(32, eloConfig.k());
-        assertEquals(5, eloConfig.absenteeDemerit());
     }
 
     @Test
@@ -61,7 +59,7 @@ class RankingConfigConverterTest {
 
     @Test
     void roundTrip_modifiedEloConfig_preservesValues() {
-        ModifiedEloConfig original = new ModifiedEloConfig(20, 10);
+        ModifiedEloConfig original = new ModifiedEloConfig(20);
 
         String json = converter.convertToDatabaseColumn(original);
         RankingConfig restored = converter.convertToEntityAttribute(json);
@@ -69,6 +67,5 @@ class RankingConfigConverterTest {
         assertInstanceOf(ModifiedEloConfig.class, restored);
         ModifiedEloConfig restoredElo = (ModifiedEloConfig) restored;
         assertEquals(original.k(), restoredElo.k());
-        assertEquals(original.absenteeDemerit(), restoredElo.absenteeDemerit());
     }
 }

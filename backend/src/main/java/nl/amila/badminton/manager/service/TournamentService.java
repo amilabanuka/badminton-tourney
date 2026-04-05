@@ -1,8 +1,10 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
+import nl.amila.badminton.manager.dto.apl.AplSettingsRequest;
 import nl.amila.badminton.manager.dto.league.LeagueSettingsRequest;
 import nl.amila.badminton.manager.dto.oneoff.OneOffSettingsRequest;
+import nl.amila.badminton.manager.entity.apl.AplTournamentSettings;
 import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
 import nl.amila.badminton.manager.entity.ModifiedEloConfig;
 import nl.amila.badminton.manager.entity.oneoff.OneOffTournamentSettings;
@@ -13,6 +15,8 @@ import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.apl.AplGameDayRepository;
+import nl.amila.badminton.manager.repository.apl.AplTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.league.LeagueGameDayRepository;
 import nl.amila.badminton.manager.repository.league.LeagueTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.oneoff.OneOffTournamentSettingsRepository;
@@ -38,20 +42,26 @@ public class TournamentService {
     private final TournamentPlayerRepository tournamentPlayerRepository;
     private final LeagueTournamentSettingsRepository leagueSettingsRepository;
     private final OneOffTournamentSettingsRepository oneOffSettingsRepository;
+    private final AplTournamentSettingsRepository aplSettingsRepository;
     private final LeagueGameDayRepository leagueGameDayRepository;
+    private final AplGameDayRepository aplGameDayRepository;
 
     public TournamentService(TournamentRepository tournamentRepository,
                              UserRepository userRepository,
                              TournamentPlayerRepository tournamentPlayerRepository,
                              LeagueTournamentSettingsRepository leagueSettingsRepository,
                              OneOffTournamentSettingsRepository oneOffSettingsRepository,
-                             LeagueGameDayRepository leagueGameDayRepository) {
+                             AplTournamentSettingsRepository aplSettingsRepository,
+                             LeagueGameDayRepository leagueGameDayRepository,
+                             AplGameDayRepository aplGameDayRepository) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
         this.tournamentPlayerRepository = tournamentPlayerRepository;
         this.leagueSettingsRepository = leagueSettingsRepository;
         this.oneOffSettingsRepository = oneOffSettingsRepository;
+        this.aplSettingsRepository = aplSettingsRepository;
         this.leagueGameDayRepository = leagueGameDayRepository;
+        this.aplGameDayRepository = aplGameDayRepository;
     }
 
     /**
@@ -99,9 +109,6 @@ public class TournamentService {
             if (ls.getK() == null || ls.getK() <= 0) {
                 return new TournamentResponse(false, "k must be a positive integer");
             }
-            if (ls.getAbsenteeDemerit() == null || ls.getAbsenteeDemerit() < 0) {
-                return new TournamentResponse(false, "Absentee demerit must be non-negative");
-            }
         } else if (type == TournamentType.ONE_OFF) {
             OneOffSettingsRequest os = request.getOneOffSettings();
             if (os == null) {
@@ -112,6 +119,20 @@ public class TournamentService {
             }
             if (os.getMaxPoints() == null || !Set.of(15, 21).contains(os.getMaxPoints())) {
                 return new TournamentResponse(false, "Max points must be 15 or 21");
+            }
+        } else if (type == TournamentType.APL) {
+            AplSettingsRequest as = request.getAplSettings();
+            if (as == null) {
+                return new TournamentResponse(false, "APL settings are required");
+            }
+            if (as.getRankingLogic() == null) {
+                return new TournamentResponse(false, "Ranking logic is required");
+            }
+            if (as.getK() == null || as.getK() <= 0) {
+                return new TournamentResponse(false, "k must be a positive integer");
+            }
+            if (as.getDeactivationCount() != null && (as.getDeactivationCount() < 1 || as.getDeactivationCount() > 20)) {
+                return new TournamentResponse(false, "Deactivation count must be between 1 and 20");
             }
         }
 
@@ -131,11 +152,16 @@ public class TournamentService {
         // Persist type-specific settings
         if (type == TournamentType.LEAGUE) {
             LeagueSettingsRequest ls = request.getLeagueSettings();
-            ModifiedEloConfig config = new ModifiedEloConfig(ls.getK(), ls.getAbsenteeDemerit());
+            ModifiedEloConfig config = new ModifiedEloConfig(ls.getK());
             leagueSettingsRepository.save(new LeagueTournamentSettings(savedTournament, ls.getRankingLogic(), config));
         } else if (type == TournamentType.ONE_OFF) {
             OneOffSettingsRequest os = request.getOneOffSettings();
             oneOffSettingsRepository.save(new OneOffTournamentSettings(savedTournament, os.getNumberOfRounds(), os.getMaxPoints()));
+        } else if (type == TournamentType.APL) {
+            AplSettingsRequest as = request.getAplSettings();
+            ModifiedEloConfig config = new ModifiedEloConfig(as.getK());
+            aplSettingsRepository.save(new AplTournamentSettings(savedTournament, as.getRankingLogic(), config,
+                as.getAbsenteeDemeritPoints(), as.getDeactivationCount()));
         }
 
         TournamentResponse.TournamentDto tournamentDto = new TournamentResponse.TournamentDto(
@@ -182,11 +208,8 @@ public class TournamentService {
             if (request.getK() == null || request.getK() <= 0) {
                 return new TournamentResponse(false, "k must be a positive integer");
             }
-            if (request.getAbsenteeDemerit() == null || request.getAbsenteeDemerit() < 0) {
-                return new TournamentResponse(false, "Absentee demerit must be non-negative");
-            }
             LeagueTournamentSettings settings = settingsOpt.get();
-            settings.setRankingConfig(new ModifiedEloConfig(request.getK(), request.getAbsenteeDemerit()));
+            settings.setRankingConfig(new ModifiedEloConfig(request.getK()));
             leagueSettingsRepository.save(settings);
         } else if (tournament.getType() == TournamentType.ONE_OFF) {
             Optional<OneOffTournamentSettings> settingsOpt = oneOffSettingsRepository.findByTournamentId(tournamentId);
@@ -203,6 +226,22 @@ public class TournamentService {
             settings.setNumberOfRounds(request.getNumberOfRounds());
             settings.setMaxPoints(request.getMaxPoints());
             oneOffSettingsRepository.save(settings);
+        } else if (tournament.getType() == TournamentType.APL) {
+            Optional<AplTournamentSettings> settingsOpt = aplSettingsRepository.findByTournamentId(tournamentId);
+            if (settingsOpt.isEmpty()) {
+                return new TournamentResponse(false, "APL settings not found for this tournament");
+            }
+            if (request.getK() == null || request.getK() <= 0) {
+                return new TournamentResponse(false, "k must be a positive integer");
+            }
+            if (request.getDeactivationCount() != null && (request.getDeactivationCount() < 1 || request.getDeactivationCount() > 20)) {
+                return new TournamentResponse(false, "Deactivation count must be between 1 and 20");
+            }
+            AplTournamentSettings settings = settingsOpt.get();
+            settings.setRankingConfig(new ModifiedEloConfig(request.getK()));
+            settings.setAbsenteeDemeritPoints(request.getAbsenteeDemeritPoints());
+            settings.setDeactivationCount(request.getDeactivationCount());
+            aplSettingsRepository.save(settings);
         }
 
         // Reload to reflect updated settings via @OneToOne
@@ -542,7 +581,6 @@ public class TournamentService {
                     dto.setRankingLogic(ls.getRankingLogic());
                     if (ls.getRankingConfig() instanceof ModifiedEloConfig elo) {
                         dto.setK(elo.k());
-                        dto.setAbsenteeDemerit(elo.absenteeDemerit());
                     }
                 }
             }
@@ -551,6 +589,17 @@ public class TournamentService {
                 if (os != null) {
                     dto.setNumberOfRounds(os.getNumberOfRounds());
                     dto.setMaxPoints(os.getMaxPoints());
+                }
+            }
+            case APL -> {
+                AplTournamentSettings as = t.getAplSettings();
+                if (as != null) {
+                    dto.setRankingLogic(as.getRankingLogic());
+                    if (as.getRankingConfig() instanceof ModifiedEloConfig elo) {
+                        dto.setK(elo.k());
+                    }
+                    dto.setAbsenteeDemeritPoints(as.getAbsenteeDemeritPoints());
+                    dto.setDeactivationCount(as.getDeactivationCount());
                 }
             }
         }
@@ -609,14 +658,26 @@ public class TournamentService {
         dto.setTournamentPlayerId(tpOpt.get().getId());
 
         // Attach game day summaries: ONGOING first, then remaining by date desc
-        List<PlayerTournamentResponse.GameDaySummaryDto> summaries = leagueGameDayRepository
-            .findByTournamentIdOrderByGameDateDesc(tournamentId)
-            .stream()
-            .map(d -> new PlayerTournamentResponse.GameDaySummaryDto(
-                d.getId(), d.getGameDate().toString(), d.getStatus().name()))
-            .sorted(Comparator.comparing(
-                (PlayerTournamentResponse.GameDaySummaryDto s) -> "ONGOING".equals(s.getStatus()) ? 0 : 1))
-            .collect(Collectors.toList());
+        List<PlayerTournamentResponse.GameDaySummaryDto> summaries;
+        if (tournament.getType() == TournamentType.APL) {
+            summaries = aplGameDayRepository
+                .findByTournamentIdOrderByGameDateDesc(tournamentId)
+                .stream()
+                .map(d -> new PlayerTournamentResponse.GameDaySummaryDto(
+                    d.getId(), d.getGameDate().toString(), d.getStatus().name()))
+                .sorted(Comparator.comparing(
+                    (PlayerTournamentResponse.GameDaySummaryDto s) -> "ONGOING".equals(s.getStatus()) ? 0 : 1))
+                .collect(Collectors.toList());
+        } else {
+            summaries = leagueGameDayRepository
+                .findByTournamentIdOrderByGameDateDesc(tournamentId)
+                .stream()
+                .map(d -> new PlayerTournamentResponse.GameDaySummaryDto(
+                    d.getId(), d.getGameDate().toString(), d.getStatus().name()))
+                .sorted(Comparator.comparing(
+                    (PlayerTournamentResponse.GameDaySummaryDto s) -> "ONGOING".equals(s.getStatus()) ? 0 : 1))
+                .collect(Collectors.toList());
+        }
         dto.setGameDays(summaries);
 
         return new PlayerTournamentResponse(true, "Tournament retrieved successfully", dto);

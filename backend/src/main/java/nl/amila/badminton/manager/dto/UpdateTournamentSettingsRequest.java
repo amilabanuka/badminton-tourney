@@ -8,10 +8,12 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class UpdateTournamentSettingsRequest {
-    // LEAGUE fields (required when tournament type is LEAGUE):
+    // LEAGUE / APL field:
     private Integer k;
-    private Integer absenteeDemerit;
     // ONE_OFF fields (required when tournament type is ONE_OFF):
     private Integer numberOfRounds;
     private Integer maxPoints;
+    // APL-only fields:
+    private String absenteeDemeritPoints;
+    private Integer deactivationCount;
 }

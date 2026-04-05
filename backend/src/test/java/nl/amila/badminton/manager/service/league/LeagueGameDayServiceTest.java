@@ -279,7 +279,7 @@ class LeagueGameDayServiceTest {
 
     private void stubEloSettings(int k) {
         LeagueTournamentSettings settings = new LeagueTournamentSettings(
-            tournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(k, 5));
+            tournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(k));
         when(leagueSettingsRepository.findByTournamentId(1L)).thenReturn(Optional.of(settings));
     }
 

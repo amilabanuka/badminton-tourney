@@ -69,9 +69,10 @@ public class TournamentResponse {
     public static class TournamentSettingsDto {
         private RankingLogic rankingLogic;
         private Integer k;
-        private Integer absenteeDemerit;
         private Integer numberOfRounds;
         private Integer maxPoints;
+        private String absenteeDemeritPoints;
+        private Integer deactivationCount;
     }
 
     @Getter

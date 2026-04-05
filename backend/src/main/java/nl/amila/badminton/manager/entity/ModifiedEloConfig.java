@@ -1,4 +1,4 @@
 package nl.amila.badminton.manager.entity;
 
-public record ModifiedEloConfig(int k, int absenteeDemerit) implements RankingConfig {
+public record ModifiedEloConfig(int k) implements RankingConfig {
 }

@@ -92,6 +92,7 @@
                 <p class="mb-0">
                   <span v-if="tournament.type === 'LEAGUE'" class="badge bg-primary">League</span>
                   <span v-else-if="tournament.type === 'ONE_OFF'" class="badge bg-info text-dark">One-off</span>
+                  <span v-else-if="tournament.type === 'APL'" class="badge" style="background-color: #6f42c1; color: #fff;">APL</span>
                   <span v-else class="badge bg-secondary">Unknown</span>
                 </p>
               </div>
@@ -305,13 +306,9 @@
                 <label class="text-muted small">Ranking Logic</label>
                 <p class="mb-0 fw-bold">Modified ELO</p>
               </div>
-              <div class="mb-2">
+              <div class="mb-0">
                 <label class="text-muted small">K Factor</label>
                 <p class="mb-0">{{ tournament.settings.k }}</p>
-              </div>
-              <div class="mb-0">
-                <label class="text-muted small">Absentee Demerit</label>
-                <p class="mb-0">{{ tournament.settings.absenteeDemerit }}</p>
               </div>
             </template>
             <!-- One-off settings display -->
@@ -323,6 +320,25 @@
               <div class="mb-0">
                 <label class="text-muted small">Max Points Per Game</label>
                 <p class="mb-0">{{ tournament.settings.maxPoints }}</p>
+              </div>
+            </template>
+            <!-- APL settings display -->
+            <template v-else-if="tournament.type === 'APL'">
+              <div class="mb-2">
+                <label class="text-muted small">Ranking Logic</label>
+                <p class="mb-0 fw-bold">Modified ELO</p>
+              </div>
+              <div class="mb-2">
+                <label class="text-muted small">K Factor</label>
+                <p class="mb-0">{{ tournament.settings.k }}</p>
+              </div>
+              <div class="mb-2">
+                <label class="text-muted small">Absentee Demerit Points</label>
+                <p class="mb-0">{{ tournament.settings.absenteeDemeritPoints || '-' }}</p>
+              </div>
+              <div class="mb-0">
+                <label class="text-muted small">Deactivation Count</label>
+                <p class="mb-0">{{ tournament.settings.deactivationCount || '-' }}</p>
               </div>
             </template>
           </div>
@@ -399,7 +415,7 @@
               <p class="form-control-plaintext fw-bold mb-0">Modified ELO</p>
               <div class="form-text">Ranking logic cannot be changed after creation.</div>
             </div>
-            <div class="mb-3">
+            <div class="mb-0">
               <label for="editK" class="form-label">K Factor <span class="text-danger">*</span></label>
               <input
                 id="editK"
@@ -410,18 +426,6 @@
                 :class="{ 'is-invalid': editSettingsErrors.k }"
               >
               <div v-if="editSettingsErrors.k" class="invalid-feedback d-block">{{ editSettingsErrors.k }}</div>
-            </div>
-            <div class="mb-0">
-              <label for="editAbsenteeDemerit" class="form-label">Absentee Demerit <span class="text-danger">*</span></label>
-              <input
-                id="editAbsenteeDemerit"
-                v-model.number="editSettings.absenteeDemerit"
-                type="number"
-                min="0"
-                class="form-control"
-                :class="{ 'is-invalid': editSettingsErrors.absenteeDemerit }"
-              >
-              <div v-if="editSettingsErrors.absenteeDemerit" class="invalid-feedback d-block">{{ editSettingsErrors.absenteeDemerit }}</div>
             </div>
           </template>
           <!-- One-off settings fields -->
@@ -450,6 +454,49 @@
                 <option :value="21">21</option>
               </select>
               <div v-if="editSettingsErrors.maxPoints" class="invalid-feedback d-block">{{ editSettingsErrors.maxPoints }}</div>
+            </div>
+          </template>
+          <!-- APL settings fields -->
+          <template v-else-if="tournament.type === 'APL'">
+            <div class="mb-3">
+              <label class="form-label">Ranking Logic</label>
+              <p class="form-control-plaintext fw-bold mb-0">Modified ELO</p>
+              <div class="form-text">Ranking logic cannot be changed after creation.</div>
+            </div>
+            <div class="mb-3">
+              <label for="editAplK" class="form-label">K Factor <span class="text-danger">*</span></label>
+              <input
+                id="editAplK"
+                v-model.number="editSettings.k"
+                type="number"
+                min="1"
+                class="form-control"
+                :class="{ 'is-invalid': editSettingsErrors.k }"
+              >
+              <div v-if="editSettingsErrors.k" class="invalid-feedback d-block">{{ editSettingsErrors.k }}</div>
+            </div>
+            <div class="mb-3">
+              <label for="editAbsenteeDemeritPoints" class="form-label">Absentee Demerit Points</label>
+              <input
+                id="editAbsenteeDemeritPoints"
+                v-model="editSettings.absenteeDemeritPoints"
+                type="text"
+                class="form-control"
+                placeholder="e.g. 10,8,5,3"
+              >
+              <div class="form-text">Comma-separated demerit point values per absence.</div>
+            </div>
+            <div class="mb-0">
+              <label for="editDeactivationCount" class="form-label">Deactivation Count</label>
+              <select
+                id="editDeactivationCount"
+                v-model.number="editSettings.deactivationCount"
+                class="form-select"
+              >
+                <option value="">-- None --</option>
+                <option v-for="n in 20" :key="n" :value="n">{{ n }}</option>
+              </select>
+              <div class="form-text">Number of absences before automatic deactivation.</div>
             </div>
           </template>
         </div>
@@ -864,9 +911,10 @@ export default {
       const s = this.tournament.settings || {}
       this.editSettings = {
         k: s.k ?? null,
-        absenteeDemerit: s.absenteeDemerit ?? null,
         numberOfRounds: s.numberOfRounds ?? null,
-        maxPoints: s.maxPoints ?? null
+        maxPoints: s.maxPoints ?? null,
+        absenteeDemeritPoints: s.absenteeDemeritPoints ?? '',
+        deactivationCount: s.deactivationCount ?? ''
       }
       this.editSettingsErrors = {}
       this.editSettingsError = null
@@ -896,15 +944,29 @@ export default {
           this.editSettingsErrors.maxPoints = 'Max points must be 15 or 21'
           isValid = false
         }
+      } else if (this.tournament.type === 'APL') {
+        if (!this.editSettings.k || this.editSettings.k <= 0) {
+          this.editSettingsErrors.k = 'K factor must be a positive integer'
+          isValid = false
+        }
       }
 
       if (!isValid) return
 
       this.savingSettings = true
       try {
-        const payload = this.tournament.type === 'LEAGUE'
-          ? { k: this.editSettings.k, absenteeDemerit: this.editSettings.absenteeDemerit }
-          : { numberOfRounds: this.editSettings.numberOfRounds, maxPoints: this.editSettings.maxPoints }
+        let payload
+        if (this.tournament.type === 'LEAGUE') {
+          payload = { k: this.editSettings.k, absenteeDemerit: this.editSettings.absenteeDemerit }
+        } else if (this.tournament.type === 'ONE_OFF') {
+          payload = { numberOfRounds: this.editSettings.numberOfRounds, maxPoints: this.editSettings.maxPoints }
+        } else if (this.tournament.type === 'APL') {
+          payload = {
+            k: this.editSettings.k,
+            absenteeDemeritPoints: this.editSettings.absenteeDemeritPoints || null,
+            deactivationCount: this.editSettings.deactivationCount ? parseInt(this.editSettings.deactivationCount) : null
+          }
+        }
 
         const response = await tournamentAPI.updateTournamentSettings(this.tournament.id, payload)
         if (response.data.success) {

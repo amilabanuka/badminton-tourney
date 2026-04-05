@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import jakarta.persistence.*;
+import nl.amila.badminton.manager.entity.apl.AplTournamentSettings;
 import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
 import nl.amila.badminton.manager.entity.oneoff.OneOffTournamentSettings;
 
@@ -42,10 +43,14 @@ public class Tournament {
     @OneToOne(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
     private OneOffTournamentSettings oneOffSettings;
 
+    @OneToOne(mappedBy = "tournament", cascade = CascadeType.ALL, orphanRemoval = true)
+    private AplTournamentSettings aplSettings;
+
     public Object getSettings() {
         return switch (type) {
             case LEAGUE -> leagueSettings;
             case ONE_OFF -> oneOffSettings;
+            case APL -> aplSettings;
         };
     }
 

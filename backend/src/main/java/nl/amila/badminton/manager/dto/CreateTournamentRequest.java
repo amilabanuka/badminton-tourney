@@ -3,6 +3,7 @@ package nl.amila.badminton.manager.dto;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import nl.amila.badminton.manager.dto.apl.AplSettingsRequest;
 import nl.amila.badminton.manager.dto.league.LeagueSettingsRequest;
 import nl.amila.badminton.manager.dto.oneoff.OneOffSettingsRequest;
 import nl.amila.badminton.manager.entity.TournamentType;
@@ -17,6 +18,7 @@ public class CreateTournamentRequest {
     private TournamentType type;
     private LeagueSettingsRequest leagueSettings;
     private OneOffSettingsRequest oneOffSettings;
+    private AplSettingsRequest aplSettings;
 }
 
 

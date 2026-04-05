@@ -1,8 +1,10 @@
 package nl.amila.badminton.manager.service;
 
 import nl.amila.badminton.manager.dto.*;
+import nl.amila.badminton.manager.dto.apl.AplSettingsRequest;
 import nl.amila.badminton.manager.dto.league.LeagueSettingsRequest;
 import nl.amila.badminton.manager.dto.oneoff.OneOffSettingsRequest;
+import nl.amila.badminton.manager.entity.apl.AplTournamentSettings;
 import nl.amila.badminton.manager.entity.league.LeagueTournamentSettings;
 import nl.amila.badminton.manager.entity.ModifiedEloConfig;
 import nl.amila.badminton.manager.entity.oneoff.OneOffTournamentSettings;
@@ -13,6 +15,8 @@ import nl.amila.badminton.manager.entity.TournamentAdmin;
 import nl.amila.badminton.manager.entity.TournamentPlayer;
 import nl.amila.badminton.manager.entity.TournamentType;
 import nl.amila.badminton.manager.entity.User;
+import nl.amila.badminton.manager.repository.apl.AplGameDayRepository;
+import nl.amila.badminton.manager.repository.apl.AplTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.league.LeagueTournamentSettingsRepository;
 import nl.amila.badminton.manager.repository.league.LeagueGameDayRepository;
 import nl.amila.badminton.manager.repository.oneoff.OneOffTournamentSettingsRepository;
@@ -56,6 +60,12 @@ class TournamentServiceTest {
 
     @Mock
     private OneOffTournamentSettingsRepository oneOffSettingsRepository;
+
+    @Mock
+    private AplTournamentSettingsRepository aplSettingsRepository;
+
+    @Mock
+    private AplGameDayRepository aplGameDayRepository;
 
     @InjectMocks
     private TournamentService tournamentService;
@@ -116,7 +126,6 @@ class TournamentServiceTest {
         LeagueSettingsRequest ls = new LeagueSettingsRequest();
         ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
         ls.setK(32);
-        ls.setAbsenteeDemerit(5);
         req.setLeagueSettings(ls);
         return req;
     }
@@ -231,7 +240,6 @@ class TournamentServiceTest {
         request.setType(TournamentType.LEAGUE);
         LeagueSettingsRequest ls = new LeagueSettingsRequest();
         ls.setK(32);
-        ls.setAbsenteeDemerit(5);
         // rankingLogic is null
         request.setLeagueSettings(ls);
         when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
@@ -252,7 +260,6 @@ class TournamentServiceTest {
         LeagueSettingsRequest ls = new LeagueSettingsRequest();
         ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
         ls.setK(0);
-        ls.setAbsenteeDemerit(5);
         request.setLeagueSettings(ls);
         when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
         when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
@@ -261,26 +268,6 @@ class TournamentServiceTest {
 
         assertFalse(response.isSuccess());
         assertEquals("k must be a positive integer", response.getMessage());
-    }
-
-    @Test
-    void createTournament_league_negativeAbsenteeDemerit_returnsError() {
-        CreateTournamentRequest request = new CreateTournamentRequest();
-        request.setName("Premier League");
-        request.setOwnerId(2L);
-        request.setType(TournamentType.LEAGUE);
-        LeagueSettingsRequest ls = new LeagueSettingsRequest();
-        ls.setRankingLogic(RankingLogic.MODIFIED_ELO);
-        ls.setK(32);
-        ls.setAbsenteeDemerit(-1);
-        request.setLeagueSettings(ls);
-        when(tournamentRepository.existsByName("Premier League")).thenReturn(false);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
-
-        TournamentResponse response = tournamentService.createTournament(request);
-
-        assertFalse(response.isSuccess());
-        assertEquals("Absentee demerit must be non-negative", response.getMessage());
     }
 
     // -------------------------------------------------------------------------
@@ -363,7 +350,7 @@ class TournamentServiceTest {
     @Test
     void getTournamentById_leagueTournament_includesEloSettingsInDto() {
         LeagueTournamentSettings ls = new LeagueTournamentSettings(
-            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32));
         leagueTournament.setLeagueSettings(ls);
 
         when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
@@ -376,7 +363,6 @@ class TournamentServiceTest {
         assertNotNull(settings);
         assertEquals(RankingLogic.MODIFIED_ELO, settings.getRankingLogic());
         assertEquals(32, settings.getK());
-        assertEquals(5, settings.getAbsenteeDemerit());
         assertNull(settings.getNumberOfRounds());
         assertNull(settings.getMaxPoints());
     }
@@ -407,12 +393,11 @@ class TournamentServiceTest {
     @Test
     void updateTournamentSettings_league_validRequest_updatesConfigAndReturnsDto() {
         LeagueTournamentSettings ls = new LeagueTournamentSettings(
-            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32));
         leagueTournament.setLeagueSettings(ls);
 
         UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
         request.setK(20);
-        request.setAbsenteeDemerit(10);
 
         when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
@@ -430,11 +415,10 @@ class TournamentServiceTest {
     @Test
     void updateTournamentSettings_league_invalidK_returnsError() {
         LeagueTournamentSettings ls = new LeagueTournamentSettings(
-            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32, 5));
+            leagueTournament, RankingLogic.MODIFIED_ELO, new ModifiedEloConfig(32));
 
         UpdateTournamentSettingsRequest request = new UpdateTournamentSettingsRequest();
         request.setK(0);
-        request.setAbsenteeDemerit(5);
 
         when(tournamentRepository.findById(2L)).thenReturn(Optional.of(leagueTournament));
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(adminUser));
@@ -898,5 +882,133 @@ class TournamentServiceTest {
 
         assertThrows(AccessDeniedException.class,
             () -> tournamentService.getTournamentForPlayer(1L, "admin"));
+    }
+
+    // -------------------------------------------------------------------------
+    // APL tournament tests
+    // -------------------------------------------------------------------------
+
+    private CreateTournamentRequest aplRequest(String name) {
+        CreateTournamentRequest req = new CreateTournamentRequest();
+        req.setName(name);
+        req.setOwnerId(2L);
+        req.setEnabled(true);
+        req.setType(TournamentType.APL);
+        AplSettingsRequest as = new AplSettingsRequest();
+        as.setRankingLogic(RankingLogic.MODIFIED_ELO);
+        as.setK(32);
+        as.setAbsenteeDemeritPoints("10,8,5,3");
+        as.setDeactivationCount(3);
+        req.setAplSettings(as);
+        return req;
+    }
+
+    @Test
+    void testCreateAplTournament_Success() {
+        Tournament aplTournament = new Tournament("APL Premier", 2L, true, TournamentType.APL);
+        aplTournament.setId(10L);
+
+        when(tournamentRepository.existsByName("APL Premier")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+        when(tournamentRepository.save(any(Tournament.class))).thenReturn(aplTournament);
+        when(aplSettingsRepository.save(any(AplTournamentSettings.class))).thenReturn(null);
+
+        TournamentResponse response = tournamentService.createTournament(aplRequest("APL Premier"));
+
+        assertTrue(response.isSuccess());
+        assertEquals("Tournament created successfully", response.getMessage());
+        verify(aplSettingsRepository, times(1)).save(any(AplTournamentSettings.class));
+    }
+
+    @Test
+    void testCreateAplTournament_MissingAplSettings() {
+        CreateTournamentRequest req = new CreateTournamentRequest();
+        req.setName("APL Premier");
+        req.setOwnerId(2L);
+        req.setType(TournamentType.APL);
+        // no aplSettings set
+
+        when(tournamentRepository.existsByName("APL Premier")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(req);
+
+        assertFalse(response.isSuccess());
+        assertEquals("APL settings are required", response.getMessage());
+    }
+
+    @Test
+    void testCreateAplTournament_InvalidK() {
+        CreateTournamentRequest req = aplRequest("APL Premier");
+        req.getAplSettings().setK(0);
+
+        when(tournamentRepository.existsByName("APL Premier")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(req);
+
+        assertFalse(response.isSuccess());
+        assertEquals("k must be a positive integer", response.getMessage());
+    }
+
+    @Test
+    void testCreateAplTournament_InvalidDeactivationCount() {
+        CreateTournamentRequest req = aplRequest("APL Premier");
+        req.getAplSettings().setDeactivationCount(25);
+
+        when(tournamentRepository.existsByName("APL Premier")).thenReturn(false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(tournamentAdminUser));
+
+        TournamentResponse response = tournamentService.createTournament(req);
+
+        assertFalse(response.isSuccess());
+        assertEquals("Deactivation count must be between 1 and 20", response.getMessage());
+    }
+
+    @Test
+    void testUpdateAplTournamentSettings_Success() {
+        Tournament aplTournament = new Tournament("APL Premier", 2L, true, TournamentType.APL);
+        aplTournament.setId(10L);
+        aplTournament.getAdmins().add(new TournamentAdmin(aplTournament, tournamentAdminUser));
+        AplTournamentSettings settings = new AplTournamentSettings(aplTournament, RankingLogic.MODIFIED_ELO,
+            new ModifiedEloConfig(32), "10,8,5,3", 3);
+
+        when(tournamentRepository.findById(10L)).thenReturn(Optional.of(aplTournament));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+        when(aplSettingsRepository.findByTournamentId(10L)).thenReturn(Optional.of(settings));
+        when(aplSettingsRepository.save(any(AplTournamentSettings.class))).thenReturn(settings);
+        when(tournamentRepository.findById(10L)).thenReturn(Optional.of(aplTournament));
+
+        UpdateTournamentSettingsRequest req = new UpdateTournamentSettingsRequest();
+        req.setK(40);
+        req.setAbsenteeDemeritPoints("12,10,8,6");
+        req.setDeactivationCount(5);
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(10L, req, "tourny_admin");
+
+        assertTrue(response.isSuccess());
+        verify(aplSettingsRepository, times(1)).save(any(AplTournamentSettings.class));
+    }
+
+    @Test
+    void testUpdateAplTournamentSettings_InvalidDeactivationCount() {
+        Tournament aplTournament = new Tournament("APL Premier", 2L, true, TournamentType.APL);
+        aplTournament.setId(10L);
+        aplTournament.getAdmins().add(new TournamentAdmin(aplTournament, tournamentAdminUser));
+        AplTournamentSettings settings = new AplTournamentSettings(aplTournament, RankingLogic.MODIFIED_ELO,
+            new ModifiedEloConfig(32), "10,8,5,3", 3);
+
+        when(tournamentRepository.findById(10L)).thenReturn(Optional.of(aplTournament));
+        when(userRepository.findByUsername("tourny_admin")).thenReturn(Optional.of(tournamentAdminUser));
+        when(aplSettingsRepository.findByTournamentId(10L)).thenReturn(Optional.of(settings));
+
+        UpdateTournamentSettingsRequest req = new UpdateTournamentSettingsRequest();
+        req.setK(40);
+        req.setDeactivationCount(0);
+
+        TournamentResponse response = tournamentService.updateTournamentSettings(10L, req, "tourny_admin");
+
+        assertFalse(response.isSuccess());
+        assertEquals("Deactivation count must be between 1 and 20", response.getMessage());
     }
 }

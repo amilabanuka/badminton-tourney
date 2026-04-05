@@ -11,5 +11,4 @@ import nl.amila.badminton.manager.entity.RankingLogic;
 public class LeagueSettingsRequest {
     private RankingLogic rankingLogic;
     private Integer k;
-    private Integer absenteeDemerit;
 }
