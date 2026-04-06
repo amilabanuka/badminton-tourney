@@ -12,5 +12,6 @@ public interface TournamentPlayerRepository extends JpaRepository<TournamentPlay
     Optional<TournamentPlayer> findByTournamentIdAndUserId(Long tournamentId, Long userId);
     List<TournamentPlayer> findByTournamentIdOrderByRankScoreDescUserIdAsc(Long tournamentId);
     List<TournamentPlayer> findByUserId(Long userId);
+    List<TournamentPlayer> findByTournamentId(Long tournamentId);
 }
 

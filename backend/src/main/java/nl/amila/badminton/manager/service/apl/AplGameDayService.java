@@ -396,6 +396,7 @@ public class AplGameDayService {
         if (settingsOpt.isEmpty() || !(settingsOpt.get().getRankingConfig() instanceof ModifiedEloConfig eloConfig)) {
             return new AplGameDayResponse(false, "APL ELO settings not found for this tournament");
         }
+        AplTournamentSettings settings = settingsOpt.get();
         double K = eloConfig.k();
 
         // For each match: compute ELO delta, save history rows (using current rankScore as baseline),
@@ -451,12 +452,68 @@ public class AplGameDayService {
             });
         }
 
+        // Process absences: deduct demerit points and possibly disable absent players
+        boolean hasDemeritConfig = settings.getAbsenteeDemeritPoints() != null
+            && !settings.getAbsenteeDemeritPoints().isBlank();
+        boolean hasDeactivationConfig = settings.getDeactivationCount() != null;
+        if (hasDemeritConfig || hasDeactivationConfig) {
+            Set<Long> participantIds = day.getGroups().stream()
+                .flatMap(g -> g.getPlayers().stream())
+                .map(gp -> gp.getTournamentPlayer().getId())
+                .collect(Collectors.toSet());
+
+            int[] demeritPoints = parseDemeritPoints(settings.getAbsenteeDemeritPoints());
+
+            List<TournamentPlayer> allPlayers = tournamentPlayerRepository.findByTournamentId(tournamentId);
+            for (TournamentPlayer tp : allPlayers) {
+                if (tp.getStatus() == PlayerStatus.DISABLED) continue;
+                if (participantIds.contains(tp.getId())) continue;
+
+                int consecutiveAbsences = countConsecutiveAbsences(tp.getId(), dayId, tournamentId) + 1;
+
+                if (demeritPoints.length > 0) {
+                    int idx = Math.min(consecutiveAbsences - 1, demeritPoints.length - 1);
+                    BigDecimal demerit = BigDecimal.valueOf(demeritPoints[idx]);
+                    tp.setRankScore(tp.getRankScore().subtract(demerit));
+                }
+
+                if (hasDeactivationConfig && consecutiveAbsences >= settings.getDeactivationCount()) {
+                    tp.setStatus(PlayerStatus.DISABLED);
+                    tp.setStatusChangedAt(System.currentTimeMillis());
+                }
+
+                tournamentPlayerRepository.save(tp);
+            }
+        }
+
         day.setStatus(AplGameDayStatus.COMPLETED);
         day.setUpdatedAt(System.currentTimeMillis());
         aplGameDayRepository.save(day);
 
         AplGameDay refreshed = aplGameDayRepository.findByIdWithAll(dayId).orElse(day);
         return new AplGameDayResponse(true, "Game day finished and rankings updated", toDto(refreshed));
+    }
+
+    private int countConsecutiveAbsences(Long playerId, Long currentDayId, Long tournamentId) {
+        List<AplGameDay> history = aplGameDayRepository.findByTournamentIdOrderByGameDateDesc(tournamentId);
+        int count = 0;
+        for (AplGameDay d : history) {
+            if (d.getId().equals(currentDayId)) continue;
+            if (d.getStatus() != AplGameDayStatus.COMPLETED) continue;
+            if (aplGameDayRepository.isPlayerPresentInGameDay(d.getId(), playerId)) break;
+            count++;
+        }
+        return count;
+    }
+
+    private int[] parseDemeritPoints(String raw) {
+        if (raw == null || raw.isBlank()) return new int[0];
+        String[] parts = raw.split(",");
+        int[] result = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            result[i] = Integer.parseInt(parts[i].trim());
+        }
+        return result;
     }
 
     /**

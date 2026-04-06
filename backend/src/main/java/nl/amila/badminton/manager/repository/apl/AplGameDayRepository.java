@@ -17,6 +17,14 @@ public interface AplGameDayRepository extends JpaRepository<AplGameDay, Long> {
     boolean existsByTournamentIdAndGameDate(Long tournamentId, LocalDate gameDate);
 
     @Query("""
+            SELECT COUNT(gp) > 0 FROM AplGameDayGroupPlayer gp
+            WHERE gp.group.gameDay.id = :gameDayId
+              AND gp.tournamentPlayer.id = :playerId
+            """)
+    boolean isPlayerPresentInGameDay(@Param("gameDayId") Long gameDayId,
+                                     @Param("playerId") Long playerId);
+
+    @Query("""
             SELECT DISTINCT d FROM AplGameDay d
             LEFT JOIN FETCH d.groups g
             LEFT JOIN FETCH g.players gp
